@@ -12,7 +12,7 @@ export default defineConfig({
       injectRegister: false, // o registro é feito em src/pwa/sw.ts
       manifest: false, // usamos public/manifest.webmanifest (seção 9.1)
       workbox: {
-        globPatterns: ['**/*.{html,js,css,woff2,png,webp,svg,webmanifest}'],
+        globPatterns: ['**/*.{html,js,css,woff2,png,jpg,jpeg,gif,avif,webp,svg,webmanifest}'],
       },
     }),
   ],

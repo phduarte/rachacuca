@@ -7,7 +7,7 @@ import { bindInput } from './render/input';
 import { VictoryEffect } from './render/victory';
 import { setupServiceWorker } from './pwa/sw';
 import { applyPalette, paletteById } from './theme/palettes';
-import { builtinImageUrl, photoFromFile } from './theme/images';
+import { builtinImageUrl, fileImageUrl, photoFromFile } from './theme/images';
 import { loadPhoto, loadSettings, savePhoto, saveSettings } from './settings';
 import { createBrand } from './ui/brand';
 import { createMenu, createMenuButton } from './ui/menu';
@@ -82,9 +82,18 @@ app.append(topBar, display, view.el, menu.el, victory.canvas);
 applyPalette(paletteById(settings.palette));
 applyImage();
 
+let imageRequest = 0;
+
 function applyImage(): void {
-  if (settings.image === 'user' && photo) view.setImage(photo);
-  else view.setImage(builtinImageUrl(settings.image), true);
+  const req = ++imageRequest;
+  if (settings.image === 'user' && photo) return view.setImage(photo);
+  const file = fileImageUrl(settings.image);
+  if (!file) return view.setImage(builtinImageUrl(settings.image), true);
+  // A imagem da pasta é recortada de forma assíncrona; ignora respostas velhas.
+  file.then(
+    ({ url, pixelated }) => req === imageRequest && view.setImage(url, pixelated),
+    () => req === imageRequest && view.setImage(null),
+  );
 }
 
 let size: Size = 4;

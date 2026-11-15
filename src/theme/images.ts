@@ -171,6 +171,61 @@ export function builtinImageUrl(id: string): string | null {
   return url;
 }
 
+/**
+ * Imagens da pasta assets/images: cada arquivo vira uma opção do menu.
+ * O id é "file:<nome-do-arquivo-sem-extensão>".
+ */
+export interface FileImage {
+  id: string;
+  name: string;
+  /** URL do arquivo original (serve de miniatura no menu). */
+  url: string;
+}
+
+const files = import.meta.glob<string>('../../assets/images/*.{png,jpg,jpeg,webp,gif,avif}', {
+  eager: true,
+  query: '?url',
+  import: 'default',
+});
+
+export const FILE_IMAGES: FileImage[] = Object.entries(files)
+  .map(([path, url]) => {
+    const base = path.split('/').pop()!.replace(/\.[^.]+$/, '');
+    return { id: `file:${base}`, name: base.replace(/[-_]+/g, ' ').toUpperCase(), url };
+  })
+  .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+
+const fileCache = new Map<string, Promise<{ url: string; pixelated: boolean }>>();
+
+/**
+ * Recorta (uma vez) o quadrado central da imagem da pasta. Imagens pequenas
+ * (até 128 px) são tratadas como pixel art e exibidas sem suavização.
+ */
+export function fileImageUrl(id: string): Promise<{ url: string; pixelated: boolean }> | null {
+  const img = FILE_IMAGES.find((i) => i.id === id);
+  if (!img) return null;
+  let hit = fileCache.get(id);
+  if (!hit) {
+    hit = (async () => {
+      const el = new Image();
+      el.src = img.url;
+      await el.decode();
+      const s = Math.min(el.naturalWidth, el.naturalHeight);
+      const pixelated = s <= 128;
+      const side = Math.min(s, 1024);
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = side;
+      const ctx = canvas.getContext('2d')!;
+      ctx.imageSmoothingEnabled = !pixelated;
+      ctx.drawImage(el, (el.naturalWidth - s) / 2, (el.naturalHeight - s) / 2, s, s, 0, 0, side, side);
+      return { url: canvas.toDataURL('image/png'), pixelated };
+    })();
+    hit.catch(() => fileCache.delete(id));
+    fileCache.set(id, hit);
+  }
+  return hit;
+}
+
 /** Lê uma foto escolhida pelo jogador, recorta o quadrado central e reduz. */
 export async function photoFromFile(file: File, side = 512): Promise<string> {
   const bitmap = await createImageBitmap(file);

@@ -3,7 +3,7 @@
  * e imagem das peças. As escolhas valem na hora; fechar volta ao jogo.
  */
 import { PALETTES, type Palette } from '../theme/palettes';
-import { BUILTIN_IMAGES, builtinImageUrl } from '../theme/images';
+import { BUILTIN_IMAGES, FILE_IMAGES, builtinImageUrl } from '../theme/images';
 
 export interface MenuState {
   palette: string;
@@ -75,6 +75,7 @@ export function createMenu(state: () => MenuState, h: MenuHandlers): { el: HTMLD
     const opts: Array<{ id: string; name: string; url: string | null }> = [
       { id: 'none', name: 'NÚMEROS', url: null },
       ...BUILTIN_IMAGES.map((i) => ({ id: i.id, name: i.name, url: builtinImageUrl(i.id) })),
+      ...FILE_IMAGES,
     ];
     if (s.photo) opts.push({ id: 'user', name: 'SUA FOTO', url: s.photo });
     imageGrid.replaceChildren(...opts.map((o) => picture(o.id, o.name, o.url, o.id === s.image)));
@@ -102,7 +103,7 @@ export function createMenu(state: () => MenuState, h: MenuHandlers): { el: HTMLD
     thumb.className = url ? 'picture-thumb' : 'picture-thumb picture-thumb--numbers';
     if (url) {
       thumb.style.backgroundImage = `url("${url}")`;
-      if (id !== 'user') thumb.classList.add('pixelated');
+      if (id !== 'user' && !id.startsWith('file:')) thumb.classList.add('pixelated');
     } else {
       thumb.textContent = '123';
     }
