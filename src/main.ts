@@ -4,6 +4,7 @@ import { newSeed, shuffle } from './core/shuffle';
 import { formatTime, Timer } from './core/timer';
 import { BoardView } from './render/boardView';
 import { bindInput } from './render/input';
+import { VictoryEffect } from './render/victory';
 import { setupServiceWorker } from './pwa/sw';
 import { applyPalette, paletteById } from './theme/palettes';
 import { builtinImageUrl, photoFromFile } from './theme/images';
@@ -76,7 +77,8 @@ const menu = createMenu(() => ({ palette: settings.palette, image: settings.imag
   },
 });
 
-app.append(topBar, display, view.el, menu.el);
+const victory = new VictoryEffect();
+app.append(topBar, display, view.el, menu.el, victory.canvas);
 applyPalette(paletteById(settings.palette));
 applyImage();
 
@@ -102,6 +104,11 @@ const countdown = document.createElement('div');
 countdown.className = 'countdown';
 countdown.setAttribute('aria-live', 'assertive');
 
+const winMsg = document.createElement('div');
+winMsg.className = 'win-msg';
+winMsg.setAttribute('role', 'status');
+winMsg.textContent = 'Rachou a Cuca!';
+
 function newGame(): void {
   const id = ++gameId;
   const shuffled = shuffle(size, newSeed());
@@ -110,6 +117,8 @@ function newGame(): void {
   won = false;
   starting = true;
   status.textContent = '';
+  victory.cancel();
+  winMsg.remove();
   timer.reset();
   view.mount(board);
   view.el.classList.remove('shuffling');
@@ -153,7 +162,11 @@ function apply(result: MoveResult | null): void {
   if (isSolved(board)) {
     won = true;
     timer.pause();
-    status.textContent = 'VOCÊ RACHOU A CUCA!';
+    renderHud();
+    victory.play(view.el, size, {
+      reveal: () => view.el.append(winMsg),
+      done: () => {},
+    });
   }
 }
 
