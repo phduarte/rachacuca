@@ -27,7 +27,7 @@ export default defineConfig({
 
 Com isso, o Vite reescreve os links do `index.html` (manifest, script, CSS) e o `vite-plugin-pwa` registra o service worker e o precache já dentro de `/rachacuca/`.
 
-**index.html** — o Vite só reescreve links para arquivos que existem. Enquanto os ícones não existirem, o `apple-touch-icon` usa o placeholder `%BASE_URL%`:
+**index.html** — o `apple-touch-icon` usa o placeholder `%BASE_URL%`, que o Vite troca pelo `base` mesmo quando o arquivo não existe:
 
 ```html
 <link rel="apple-touch-icon" href="%BASE_URL%icons/apple-touch-icon-180.png" />
@@ -45,7 +45,7 @@ Com isso, o Vite reescreve os links do `index.html` (manifest, script, CSS) e o 
 ]
 ```
 
-> **Pendência:** a pasta `public/icons/` ainda não existe no repositório. Sem os PNGs o site funciona, mas o navegador não oferece "Instalar app".
+Os ícones ficam em `public/icons/` (192, 512, maskable 512 e apple-touch 180). Sem eles o site funciona, mas o navegador não oferece "Instalar app".
 
 Se algum código futuro montar URLs à mão (ex.: `fetch('/dados.json')`), use `import.meta.env.BASE_URL + 'dados.json'`.
 
