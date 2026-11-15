@@ -8,6 +8,11 @@ export interface Credit {
 
 export const CREDITS: Credit[] = [
   {
+    what: '12 IMAGENS ORIGINAIS',
+    who: 'Projeto Racha Cuca (pixel art original)',
+    license: 'A mesma do projeto',
+  },
+  {
     what: 'FONTE PRESS START 2P',
     who: 'The Press Start 2P Project Authors',
     license: 'SIL Open Font License 1.1',

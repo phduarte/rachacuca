@@ -5,6 +5,7 @@
 import { PALETTES, type Palette } from '../theme/palettes';
 import { BUILTIN_IMAGES, FILE_IMAGES, builtinImageUrl } from '../theme/images';
 import { creditsList } from './credits';
+import { ORIGINAL_IMAGES, originalImageUrl } from '../theme/originals';
 
 export interface MenuState {
   size: number;
@@ -163,6 +164,7 @@ export function createMenu(
     colorGrid.replaceChildren(...PALETTES.map((p) => swatch(p, p.id === s.palette)));
     const opts: Array<{ id: string; name: string; url: string | null }> = [
       { id: 'none', name: 'NÚMEROS', url: null },
+      ...ORIGINAL_IMAGES.map((i) => ({ id: i.id, name: i.name, url: originalImageUrl(i.id) })),
       ...BUILTIN_IMAGES.map((i) => ({ id: i.id, name: i.name, url: builtinImageUrl(i.id) })),
       ...FILE_IMAGES,
     ];

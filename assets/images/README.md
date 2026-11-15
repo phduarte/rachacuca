@@ -1,5 +1,8 @@
 # Imagens do jogo
 
+As 12 imagens originais do jogo ficam em `public/images/originals/` (geradas por
+`scripts/make-originals.py`). Licenças de todas as imagens: [LICENSES.md](LICENSES.md).
+
 Toda imagem colocada nesta pasta (`.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.avif`)
 aparece no menu **IMAGEM** do jogo, depois das imagens desenhadas em código.
 

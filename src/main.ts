@@ -12,6 +12,7 @@ import { installMode, markIOSHintShown, promptInstall, setupInstall, shouldShowI
 import { createRotateHint, keepAwake, LANDSCAPE_PHONE, setupBackButton, setupFullscreen } from './pwa/fullscreen';
 import { applyPalette, paletteById } from './theme/palettes';
 import { builtinImageUrl, fileImageUrl, photoFromFile } from './theme/images';
+import { originalImageUrl } from './theme/originals';
 import { forgetRetro, RETRO_GRID, retroize } from './theme/retroize';
 import { loadPhoto, loadSettings, savePhoto, saveSettings, showNumbers } from './settings';
 import { createBrand } from './ui/brand';
@@ -182,6 +183,8 @@ interface SourceImage {
 /** A imagem escolhida em cores originais (null = só números). */
 async function sourceImage(): Promise<SourceImage | null> {
   if (settings.image === 'user') return photo ? { url: photo, pixelated: false, grid: RETRO_GRID } : null;
+  const original = originalImageUrl(settings.image);
+  if (original) return { url: original, pixelated: true, grid: RETRO_GRID };
   const builtin = builtinImageUrl(settings.image);
   if (builtin) return { url: builtin, pixelated: true, grid: 64 };
   const file = fileImageUrl(settings.image);
