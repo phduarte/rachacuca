@@ -6,6 +6,7 @@ import { BoardView } from './render/boardView';
 import { bindInput, SWIPE_MIN_PX, type DragControl } from './render/input';
 import { VICTORY_TIMES, VictoryEffect } from './render/victory';
 import * as sfx from './audio/sfx';
+import { holdMusic, setMusic } from './audio/music';
 import { setupServiceWorker } from './pwa/sw';
 import { applyPalette, paletteById } from './theme/palettes';
 import { builtinImageUrl, fileImageUrl, photoFromFile } from './theme/images';
@@ -82,6 +83,11 @@ const menu = createMenu(menuState, {
     saveSettings(settings);
     sfx.setVolume(level);
   },
+  music(on) {
+    settings.music = on;
+    saveSettings(settings);
+    setMusic(on);
+  },
   vibration(on) {
     settings.vibration = on;
     victory.vibration = on;
@@ -91,6 +97,7 @@ const menu = createMenu(menuState, {
 });
 
 sfx.setVolume(settings.volume);
+setMusic(settings.music);
 // Seção 6.2: o AudioContext só toca depois de um gesto do jogador (iOS e
 // Chrome). Retomar é barato, então todo toque tenta (o iOS suspende o áudio
 // ao trocar de app).
@@ -172,6 +179,7 @@ function newGame(): void {
   status.textContent = '';
   victory.cancel();
   stopVictorySound();
+  stopVictorySound = () => {};
   queue.length = 0;
   sliding = false;
   winMsg.remove();
@@ -254,7 +262,13 @@ function impact(result: MoveResult, solved: boolean): void {
   if (settings.vibration) navigator.vibrate?.(8);
   if (solved) {
     view.bump(result.direction, true);
-    stopVictorySound = sfx.victory(VICTORY_TIMES);
+    // A música sai de cena durante o efeito e volta quando ele termina.
+    holdMusic('victory', true);
+    const stopSfx = sfx.victory(VICTORY_TIMES);
+    stopVictorySound = () => {
+      stopSfx();
+      holdMusic('victory', false);
+    };
     victory.play(view.el, size, {
       reveal: () => view.el.append(winMsg),
       done: () => stopVictorySound(),
@@ -333,6 +347,8 @@ bindInput(view.el, {
 // Seção 2.5: pausa quando o app perde o foco.
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) timer.pause();
+  // Sem música tocando com o app em segundo plano.
+  holdMusic('hidden', document.hidden);
 });
 
 menuBtn.addEventListener('click', () => menu.open());

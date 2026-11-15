@@ -40,6 +40,11 @@ export function setVolume(level: number): void {
   if (ctx && master) master.gain.setTargetAtTime(volume, ctx.currentTime, 0.01);
 }
 
+/** O AudioContext do app, se já destravado e tocando (usado pela música). */
+export function audioContext(): AudioContext | null {
+  return ctx && ctx.state === 'running' ? ctx : null;
+}
+
 /** Contexto pronto para tocar agora (e com som ligado). */
 function ready(): AudioContext | null {
   return ctx && master && noiseBuf && ctx.state === 'running' && volume > 0 ? ctx : null;

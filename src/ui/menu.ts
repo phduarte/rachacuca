@@ -1,6 +1,6 @@
 /**
  * Botão de menu (sanduíche) e tela de opções: novo jogo, cor do mini-game,
- * imagem das peças, volume e vibração. As escolhas valem na hora; fechar volta ao jogo.
+ * imagem das peças, volume, música e vibração. As escolhas valem na hora; fechar volta ao jogo.
  */
 import { PALETTES, type Palette } from '../theme/palettes';
 import { BUILTIN_IMAGES, FILE_IMAGES, builtinImageUrl } from '../theme/images';
@@ -10,6 +10,7 @@ export interface MenuState {
   image: string;
   photo: string | null;
   volume: number;
+  music: boolean;
   vibration: boolean;
 }
 
@@ -22,6 +23,7 @@ export interface MenuHandlers {
   photo(file: File): Promise<void>;
   /** Nível de 0 (mudo) a 3 (alto). */
   volume(level: number): void;
+  music(on: boolean): void;
   vibration(on: boolean): void;
 }
 
@@ -75,6 +77,10 @@ export function createMenu(state: () => MenuState, h: MenuHandlers): { el: HTMLD
   const volumeGrid = grid('levels');
   sound.append(volumeGrid);
 
+  const music = section('MÚSICA');
+  const musicGrid = grid('toggle');
+  music.append(musicGrid);
+
   // A API de vibração não existe no iOS: a opção só aparece onde funciona.
   const vibration = section('VIBRAÇÃO');
   const vibrationGrid = grid('toggle');
@@ -83,7 +89,7 @@ export function createMenu(state: () => MenuState, h: MenuHandlers): { el: HTMLD
 
   const body = document.createElement('div');
   body.className = 'menu-body';
-  body.append(newGameBtn, colors, images, sound, vibration);
+  body.append(newGameBtn, colors, images, sound, music, vibration);
   dlg.append(header, body);
 
   function render(): void {
@@ -101,6 +107,13 @@ export function createMenu(state: () => MenuState, h: MenuHandlers): { el: HTMLD
       ...VOLUME_NAMES.map((name, level) => {
         const b = option(name, level === s.volume);
         b.dataset.volume = String(level);
+        return b;
+      }),
+    );
+    musicGrid.replaceChildren(
+      ...[true, false].map((on) => {
+        const b = option(on ? 'LIGADA' : 'DESLIGADA', on === s.music);
+        b.dataset.music = String(on);
         return b;
       }),
     );
@@ -158,6 +171,12 @@ export function createMenu(state: () => MenuState, h: MenuHandlers): { el: HTMLD
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-volume]');
     if (!b) return;
     h.volume(Number(b.dataset.volume));
+    render();
+  });
+  musicGrid.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-music]');
+    if (!b) return;
+    h.music(b.dataset.music === 'true');
     render();
   });
   vibrationGrid.addEventListener('click', (e) => {
