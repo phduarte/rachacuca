@@ -62,7 +62,9 @@ const display = document.createElement('section');
 display.className = 'display';
 display.append(hud, status);
 
-const menuState = () => ({ ...settings, photo, install: installMode() });
+/** Versão nova pronta (seção 9.4): aplicar recarrega o app. */
+let applyUpdate: (() => void) | null = null;
+const menuState = () => ({ ...settings, photo, install: installMode(), update: !!applyUpdate });
 const installHint = createInstallHint();
 const menu = createMenu(menuState, {
   open() {
@@ -102,6 +104,9 @@ const menu = createMenu(menuState, {
     victory.vibration = on;
     saveSettings(settings);
     if (on) navigator.vibrate?.(8);
+  },
+  update() {
+    applyUpdate?.();
   },
   install() {
     if (installMode() === 'ios') {
@@ -453,8 +458,11 @@ if (shouldShowIOSHint()) {
   installHint.open();
 }
 
-setupServiceWorker((applyUpdate) => {
-  if (confirm('NOVA VERSÃO! REINICIAR?')) applyUpdate();
+// A versão nova espera no menu; o botão do menu ganha um aviso.
+setupServiceWorker((apply) => {
+  applyUpdate = apply;
+  menuBtn.classList.add('has-update');
+  menu.refresh();
 });
 
 newGame();

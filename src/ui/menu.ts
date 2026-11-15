@@ -14,6 +14,8 @@ export interface MenuState {
   vibration: boolean;
   /** 'prompt': convite do navegador; 'ios': guia do Safari; null: nada a oferecer. */
   install: 'prompt' | 'ios' | null;
+  /** Há versão nova esperando (seção 9.4). */
+  update: boolean;
 }
 
 export interface MenuHandlers {
@@ -28,6 +30,8 @@ export interface MenuHandlers {
   music(on: boolean): void;
   vibration(on: boolean): void;
   install(): void;
+  /** Recarrega na versão nova. */
+  update(): void;
 }
 
 const VOLUME_NAMES = ['MUDO', 'BAIXO', 'MÉDIO', 'ALTO'];
@@ -59,6 +63,11 @@ export function createMenu(
   close.setAttribute('aria-label', 'Fechar opções');
   close.innerHTML = '<span></span><span></span>';
   header.append(title, close);
+
+  // Versão nova: aparece só aqui no menu, nunca no meio da partida (seção 9.4).
+  const updateBtn = document.createElement('button');
+  updateBtn.className = 'menu-primary update-btn';
+  updateBtn.textContent = 'NOVA VERSÃO! REINICIAR?';
 
   const newGameBtn = document.createElement('button');
   newGameBtn.className = 'menu-primary';
@@ -99,12 +108,13 @@ export function createMenu(
 
   const body = document.createElement('div');
   body.className = 'menu-body';
-  body.append(newGameBtn, colors, images, sound, music, vibration, installBtn);
+  body.append(updateBtn, newGameBtn, colors, images, sound, music, vibration, installBtn);
   dlg.append(header, body);
 
   function render(): void {
     const s = state();
     installBtn.hidden = !s.install;
+    updateBtn.hidden = !s.update;
     colorGrid.replaceChildren(...PALETTES.map((p) => swatch(p, p.id === s.palette)));
     const opts: Array<{ id: string; name: string; url: string | null }> = [
       { id: 'none', name: 'NÚMEROS', url: null },
@@ -215,6 +225,7 @@ export function createMenu(
     dlg.close();
     h.newGame();
   });
+  updateBtn.addEventListener('click', () => h.update());
   installBtn.addEventListener('click', () => {
     dlg.close();
     h.install();
