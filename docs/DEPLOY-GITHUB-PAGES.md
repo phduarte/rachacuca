@@ -1,6 +1,6 @@
 # Publicar o Racha Cuca no GitHub Pages
 
-O jogo é um site estático gerado pelo Vite (`npm run build` → pasta `dist/`), então o GitHub Pages o serve sem servidor. O deploy roda por GitHub Actions a cada push na `main`, e o jogo fica em **<https://phduarte.github.io/rachacuca/>**.
+O jogo é um site estático gerado pelo Vite (`npm run build` → pasta `dist/`), então o GitHub Pages o serve sem servidor. O deploy roda por GitHub Actions a cada release publicada, e o jogo fica em **<https://phduarte.github.io/rachacuca/>**.
 
 Como o site fica num subcaminho (`/rachacuca/`) e não na raiz do domínio, o único ajuste de código necessário é fazer o Vite, o manifest e o service worker do PWA respeitarem esse caminho.
 
@@ -51,14 +51,14 @@ Se algum código futuro montar URLs à mão (ex.: `fetch('/dados.json')`), use `
 
 ## 2. Criar o workflow de deploy
 
-Crie o arquivo `.github/workflows/deploy.yml`. Ele roda os testes, gera o build e publica a pasta `dist/` a cada push na `main` (ou manualmente, pela aba **Actions**).
+Crie o arquivo `.github/workflows/deploy.yml`. Ele roda os testes, gera o build e publica a pasta `dist/` a cada release publicada (ou manualmente, pela aba **Actions**). Pushes na `main` não publicam nada sozinhos.
 
 ```yaml
 name: Deploy no GitHub Pages
 
 on:
-  push:
-    branches: [main]
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -115,7 +115,17 @@ git push origin main
 3. Abra a aba **Actions** e acompanhe o workflow "Deploy no GitHub Pages". Se ele rodou antes de você trocar a Source e falhou, clique em **Re-run all jobs** (ou use **Run workflow**).
 4. Quando o job `deploy` ficar verde, o link aparece no resumo do job e em **Settings → Pages**: <https://phduarte.github.io/rachacuca/>
 
-Daqui em diante, todo push na `main` publica uma nova versão em 1–2 minutos.
+5. Libere as tags no ambiente: em **Settings → Environments → github-pages → Deployment branches and tags**, adicione uma regra de **tag** `v*`. O workflow de uma release roda na tag (ex.: `v1.2.0`), e por padrão o ambiente só aceita deploy da `main`.
+
+Daqui em diante, cada release publicada gera uma nova versão do site em 1–2 minutos. Para publicar:
+
+```bash
+git tag v1.2.0
+git push origin v1.2.0
+gh release create v1.2.0 --generate-notes
+```
+
+(Ou pela página **Releases → Draft a new release** no GitHub. Rascunhos não disparam o deploy, só a publicação. Pré-releases publicadas também disparam.)
 
 ## Verificação e solução de problemas
 
@@ -131,6 +141,7 @@ npm run preview   # abra http://localhost:4173/rachacuca/
 | Página em branco; console com 404 em `/assets/*.js` | `base` ausente ou com nome errado | `base: '/rachacuca/'` — com barras nas duas pontas e o nome exato do repositório |
 | 404 do GitHub na URL do site | Source de Pages não é "GitHub Actions", ou deploy ainda não terminou | Passo 3; confira a aba Actions |
 | Workflow falha em `deploy` com erro de permissão/ambiente | Bloco `permissions` ausente ou Source errada | Copie o YAML inteiro; Source = GitHub Actions |
+| Deploy falha com "Tag ... is not allowed to deploy to github-pages" | Ambiente `github-pages` só aceita a `main` | Passo 3.5: adicione a regra de tag `v*` |
 | Workflow falha em `npm ci` | `package-lock.json` desatualizado | Rode `npm install` localmente e faça commit do lock |
 | "Instalar app" não aparece | Ícones ausentes em `public/icons/` ou caminhos absolutos no manifest | Adicione os PNGs; use caminhos relativos (passo 1) |
 | Versão antiga continua aparecendo | Service worker serve o cache anterior | O jogo pergunta antes de atualizar (`registerType: 'prompt'`); aceite o aviso ou feche e reabra a aba |
