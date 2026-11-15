@@ -12,6 +12,8 @@ export interface MenuState {
   volume: number;
   music: boolean;
   vibration: boolean;
+  /** 'prompt': convite do navegador; 'ios': guia do Safari; null: nada a oferecer. */
+  install: 'prompt' | 'ios' | null;
 }
 
 export interface MenuHandlers {
@@ -25,6 +27,7 @@ export interface MenuHandlers {
   volume(level: number): void;
   music(on: boolean): void;
   vibration(on: boolean): void;
+  install(): void;
 }
 
 const VOLUME_NAMES = ['MUDO', 'BAIXO', 'MÉDIO', 'ALTO'];
@@ -38,7 +41,10 @@ export function createMenuButton(): HTMLButtonElement {
   return btn;
 }
 
-export function createMenu(state: () => MenuState, h: MenuHandlers): { el: HTMLDialogElement; open(): void } {
+export function createMenu(
+  state: () => MenuState,
+  h: MenuHandlers,
+): { el: HTMLDialogElement; open(): void; refresh(): void } {
   const dlg = document.createElement('dialog');
   dlg.className = 'menu';
   dlg.setAttribute('aria-labelledby', 'menu-title');
@@ -87,13 +93,18 @@ export function createMenu(state: () => MenuState, h: MenuHandlers): { el: HTMLD
   vibration.append(vibrationGrid);
   vibration.hidden = !('vibrate' in navigator);
 
+  const installBtn = document.createElement('button');
+  installBtn.className = 'menu-secondary install-btn';
+  installBtn.textContent = 'INSTALAR';
+
   const body = document.createElement('div');
   body.className = 'menu-body';
-  body.append(newGameBtn, colors, images, sound, music, vibration);
+  body.append(newGameBtn, colors, images, sound, music, vibration, installBtn);
   dlg.append(header, body);
 
   function render(): void {
     const s = state();
+    installBtn.hidden = !s.install;
     colorGrid.replaceChildren(...PALETTES.map((p) => swatch(p, p.id === s.palette)));
     const opts: Array<{ id: string; name: string; url: string | null }> = [
       { id: 'none', name: 'NÚMEROS', url: null },
@@ -204,6 +215,10 @@ export function createMenu(state: () => MenuState, h: MenuHandlers): { el: HTMLD
     dlg.close();
     h.newGame();
   });
+  installBtn.addEventListener('click', () => {
+    dlg.close();
+    h.install();
+  });
   close.addEventListener('click', () => dlg.close());
   // Toque fora do painel (no fundo escurecido) fecha.
   dlg.addEventListener('click', (e) => {
@@ -216,6 +231,9 @@ export function createMenu(state: () => MenuState, h: MenuHandlers): { el: HTMLD
       render();
       h.open();
       dlg.showModal();
+    },
+    refresh() {
+      if (dlg.open) render();
     },
   };
 }

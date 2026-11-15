@@ -797,3 +797,28 @@ button:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .pause h2 { animation: none; }
 }
+
+/* Guia de instalação no iOS */
+.install-steps {
+  margin: 0;
+  padding-left: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.install-steps svg {
+  vertical-align: middle;
+  color: var(--glow);
+}
+
+.install-steps b {
+  color: var(--accent);
+  font-weight: inherit;
+}
+
+.menu-secondary[hidden] {
+  display: none;
+}

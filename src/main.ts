@@ -8,6 +8,7 @@ import { VICTORY_TIMES, VictoryEffect } from './render/victory';
 import * as sfx from './audio/sfx';
 import { holdMusic, setMusic } from './audio/music';
 import { setupServiceWorker } from './pwa/sw';
+import { installMode, markIOSHintShown, promptInstall, setupInstall, shouldShowIOSHint } from './pwa/install';
 import { createRotateHint, keepAwake, LANDSCAPE_PHONE, setupBackButton, setupFullscreen } from './pwa/fullscreen';
 import { applyPalette, paletteById } from './theme/palettes';
 import { builtinImageUrl, fileImageUrl, photoFromFile } from './theme/images';
@@ -15,6 +16,7 @@ import { loadPhoto, loadSettings, savePhoto, saveSettings } from './settings';
 import { createBrand } from './ui/brand';
 import { createMenu, createMenuButton } from './ui/menu';
 import { createPauseButton, createPauseScreen } from './ui/pause';
+import { createInstallHint } from './ui/installHint';
 
 // Bloqueios da seção 9.2 (menu de toque longo e pinça do iOS).
 document.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -60,7 +62,8 @@ const display = document.createElement('section');
 display.className = 'display';
 display.append(hud, status);
 
-const menuState = () => ({ ...settings, photo });
+const menuState = () => ({ ...settings, photo, install: installMode() });
+const installHint = createInstallHint();
 const menu = createMenu(menuState, {
   open() {
     timer.pause();
@@ -100,6 +103,12 @@ const menu = createMenu(menuState, {
     saveSettings(settings);
     if (on) navigator.vibrate?.(8);
   },
+  install() {
+    if (installMode() === 'ios') {
+      installHint.open();
+      armBack();
+    } else void promptInstall().then(() => menu.refresh());
+  },
 });
 
 sfx.setVolume(settings.volume);
@@ -126,7 +135,7 @@ const pauseScreen = createPauseScreen({
     armBack();
   },
 });
-app.append(topBar, display, view.el, pauseScreen.el, menu.el, victory.canvas, createRotateHint());
+app.append(topBar, display, view.el, pauseScreen.el, menu.el, installHint.el, victory.canvas, createRotateHint());
 setupFullscreen();
 /** Conta os pedidos de imagem para ignorar recortes que chegam atrasados. */
 let imageRequest = 0;
@@ -436,6 +445,13 @@ matchMedia(LANDSCAPE_PHONE).addEventListener('change', (e) => {
 });
 window.addEventListener('resize', () => view.update(board));
 setInterval(renderHud, 250);
+
+setupInstall(() => menu.refresh());
+// iOS no Safari, ainda não instalado: o guia aparece sozinho uma única vez.
+if (shouldShowIOSHint()) {
+  markIOSHintShown();
+  installHint.open();
+}
 
 setupServiceWorker((applyUpdate) => {
   if (confirm('NOVA VERSÃO! REINICIAR?')) applyUpdate();
