@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
+  base: '/rachacuca/', // GitHub Pages: https://phduarte.github.io/rachacuca/
   plugins: [
     VitePWA({
       registerType: 'prompt', // seção 9.4: perguntar antes de atualizar
