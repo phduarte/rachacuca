@@ -27,12 +27,27 @@ export class BoardView {
       if (tile === 0) return;
       const t = document.createElement('div');
       t.className = 'tile';
-      t.textContent = String(tile);
+      const num = document.createElement('span');
+      num.className = 'tile-num';
+      num.textContent = String(tile);
+      t.append(num);
+      // Pedaço da imagem que esta peça mostra: o da sua casa de origem.
+      const home = tile - 1;
+      const max = board.size - 1;
+      t.style.backgroundPosition = `${(colOf(board.size, home) / max) * 100}% ${(rowOf(board.size, home) / max) * 100}%`;
       t.setAttribute('role', 'button');
       this.tileEls.set(tile, t);
       this.el.append(t);
     });
     this.update(board);
+  }
+
+  /** Imagem das peças (null = só números). `pixelated` para pixel art. */
+  setImage(url: string | null, pixelated = false): void {
+    this.el.classList.toggle('has-image', !!url);
+    this.el.classList.toggle('pixelated', !!url && pixelated);
+    if (url) this.el.style.setProperty('--img', `url("${url}")`);
+    else this.el.style.removeProperty('--img');
   }
 
   /** Posiciona cada peça na sua casa atual. */

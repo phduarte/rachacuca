@@ -1,0 +1,184 @@
+/**
+ * Botão de menu (sanduíche) e tela de opções: novo jogo, cor do mini-game
+ * e imagem das peças. As escolhas valem na hora; fechar volta ao jogo.
+ */
+import { PALETTES, type Palette } from '../theme/palettes';
+import { BUILTIN_IMAGES, builtinImageUrl } from '../theme/images';
+
+export interface MenuState {
+  palette: string;
+  image: string;
+  photo: string | null;
+}
+
+export interface MenuHandlers {
+  open(): void;
+  newGame(): void;
+  palette(id: string): void;
+  image(id: string): void;
+  /** Recebe o arquivo escolhido; resolve quando a foto já está em uso. */
+  photo(file: File): Promise<void>;
+}
+
+export function createMenuButton(): HTMLButtonElement {
+  const btn = document.createElement('button');
+  btn.className = 'icon-btn menu-btn';
+  btn.setAttribute('aria-label', 'Abrir opções');
+  btn.setAttribute('aria-haspopup', 'dialog');
+  btn.innerHTML = '<span></span><span></span><span></span>';
+  return btn;
+}
+
+export function createMenu(state: () => MenuState, h: MenuHandlers): { el: HTMLDialogElement; open(): void } {
+  const dlg = document.createElement('dialog');
+  dlg.className = 'menu';
+  dlg.setAttribute('aria-labelledby', 'menu-title');
+
+  const header = document.createElement('header');
+  header.className = 'menu-head';
+  const title = document.createElement('h2');
+  title.id = 'menu-title';
+  title.textContent = 'OPÇÕES';
+  const close = document.createElement('button');
+  close.className = 'icon-btn close-btn';
+  close.setAttribute('aria-label', 'Fechar opções');
+  close.innerHTML = '<span></span><span></span>';
+  header.append(title, close);
+
+  const newGameBtn = document.createElement('button');
+  newGameBtn.className = 'menu-primary';
+  newGameBtn.textContent = 'NOVO JOGO';
+
+  const colors = section('COR DO MINI-GAME');
+  const colorGrid = grid('swatches');
+  colors.append(colorGrid);
+
+  const images = section('IMAGEM');
+  const imageGrid = grid('pictures');
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.accept = 'image/*';
+  fileInput.hidden = true;
+  const uploadBtn = document.createElement('button');
+  uploadBtn.className = 'menu-secondary';
+  uploadBtn.textContent = 'ENVIAR FOTO';
+  images.append(imageGrid, uploadBtn, fileInput);
+
+  const body = document.createElement('div');
+  body.className = 'menu-body';
+  body.append(newGameBtn, colors, images);
+  dlg.append(header, body);
+
+  function render(): void {
+    const s = state();
+    colorGrid.replaceChildren(...PALETTES.map((p) => swatch(p, p.id === s.palette)));
+    const opts: Array<{ id: string; name: string; url: string | null }> = [
+      { id: 'none', name: 'NÚMEROS', url: null },
+      ...BUILTIN_IMAGES.map((i) => ({ id: i.id, name: i.name, url: builtinImageUrl(i.id) })),
+    ];
+    if (s.photo) opts.push({ id: 'user', name: 'SUA FOTO', url: s.photo });
+    imageGrid.replaceChildren(...opts.map((o) => picture(o.id, o.name, o.url, o.id === s.image)));
+    uploadBtn.textContent = s.photo ? 'TROCAR FOTO' : 'ENVIAR FOTO';
+  }
+
+  function swatch(p: Palette, selected: boolean): HTMLButtonElement {
+    const b = option(p.name, selected);
+    b.dataset.palette = p.id;
+    const chip = document.createElement('span');
+    chip.className = 'swatch-chip';
+    chip.style.setProperty('--sw-bezel', p.bezel);
+    chip.style.setProperty('--sw-frame', p.frame);
+    chip.style.setProperty('--sw-face', p.face);
+    chip.style.setProperty('--sw-text', p.text);
+    chip.innerHTML = '<i>1</i><i>2</i><i>3</i><i></i>';
+    b.prepend(chip);
+    return b;
+  }
+
+  function picture(id: string, name: string, url: string | null, selected: boolean): HTMLButtonElement {
+    const b = option(name, selected);
+    b.dataset.image = id;
+    const thumb = document.createElement('span');
+    thumb.className = url ? 'picture-thumb' : 'picture-thumb picture-thumb--numbers';
+    if (url) {
+      thumb.style.backgroundImage = `url("${url}")`;
+      if (id !== 'user') thumb.classList.add('pixelated');
+    } else {
+      thumb.textContent = '123';
+    }
+    b.prepend(thumb);
+    return b;
+  }
+
+  colorGrid.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-palette]');
+    if (!b) return;
+    h.palette(b.dataset.palette!);
+    render();
+  });
+  imageGrid.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-image]');
+    if (!b) return;
+    h.image(b.dataset.image!);
+    render();
+  });
+  uploadBtn.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files?.[0];
+    fileInput.value = '';
+    if (!file) return;
+    uploadBtn.disabled = true;
+    try {
+      await h.photo(file);
+    } catch {
+      alert('NÃO DEU PARA ABRIR ESSA IMAGEM.');
+    } finally {
+      uploadBtn.disabled = false;
+      render();
+    }
+  });
+  newGameBtn.addEventListener('click', () => {
+    dlg.close();
+    h.newGame();
+  });
+  close.addEventListener('click', () => dlg.close());
+  // Toque fora do painel (no fundo escurecido) fecha.
+  dlg.addEventListener('click', (e) => {
+    if (e.target === dlg) dlg.close();
+  });
+
+  return {
+    el: dlg,
+    open() {
+      render();
+      h.open();
+      dlg.showModal();
+    },
+  };
+}
+
+function section(label: string): HTMLElement {
+  const s = document.createElement('section');
+  s.className = 'menu-section';
+  const h = document.createElement('h3');
+  h.textContent = label;
+  s.append(h);
+  return s;
+}
+
+function grid(modifier: string): HTMLDivElement {
+  const g = document.createElement('div');
+  g.className = `option-grid option-grid--${modifier}`;
+  return g;
+}
+
+function option(name: string, selected: boolean): HTMLButtonElement {
+  const b = document.createElement('button');
+  b.className = 'option';
+  b.setAttribute('aria-pressed', String(selected));
+  const label = document.createElement('span');
+  label.className = 'option-label';
+  label.textContent = name;
+  b.append(label);
+  return b;
+}

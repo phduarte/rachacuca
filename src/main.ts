@@ -5,6 +5,11 @@ import { formatTime, Timer } from './core/timer';
 import { BoardView } from './render/boardView';
 import { bindInput } from './render/input';
 import { setupServiceWorker } from './pwa/sw';
+import { applyPalette, paletteById } from './theme/palettes';
+import { builtinImageUrl, photoFromFile } from './theme/images';
+import { loadPhoto, loadSettings, savePhoto, saveSettings } from './settings';
+import { createBrand } from './ui/brand';
+import { createMenu, createMenuButton } from './ui/menu';
 
 // Bloqueios da seção 9.2 (menu de toque longo e pinça do iOS).
 document.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -32,23 +37,53 @@ const movesEl = movesStat.value;
 hud.append(timeStat.el, movesStat.el);
 
 const view = new BoardView();
-const newGameBtn = document.createElement('button');
-newGameBtn.textContent = 'NOVO JOGO';
+const settings = loadSettings();
+let photo = loadPhoto();
 const status = document.createElement('div');
 status.setAttribute('aria-live', 'polite');
 
-// Layout pela zona do polegar: comando raro no topo (fora do alcance natural,
+// Layout pela zona do polegar: marca e menu no topo (fora do alcance natural,
 // longe de toques acidentais), placar grande no meio (só leitura) e tabuleiro
 // embaixo, onde o polegar alcança.
+const menuBtn = createMenuButton();
 const topBar = document.createElement('header');
 topBar.className = 'top-bar';
-topBar.append(newGameBtn);
+topBar.append(createBrand(), menuBtn);
 status.className = 'status';
 const display = document.createElement('section');
 display.className = 'display';
 display.append(hud, status);
 
-app.append(topBar, display, view.el);
+const menu = createMenu(() => ({ palette: settings.palette, image: settings.image, photo }), {
+  open: () => timer.pause(),
+  newGame: () => newGame(),
+  palette(id) {
+    settings.palette = id;
+    saveSettings(settings);
+    applyPalette(paletteById(id));
+  },
+  image(id) {
+    settings.image = id;
+    saveSettings(settings);
+    applyImage();
+  },
+  async photo(file) {
+    photo = await photoFromFile(file);
+    if (!savePhoto(photo)) alert('A FOTO VALE SÓ ATÉ FECHAR O JOGO: FALTOU ESPAÇO.');
+    settings.image = 'user';
+    saveSettings(settings);
+    applyImage();
+  },
+});
+
+app.append(topBar, display, view.el, menu.el);
+applyPalette(paletteById(settings.palette));
+applyImage();
+
+function applyImage(): void {
+  if (settings.image === 'user' && photo) view.setImage(photo);
+  else view.setImage(builtinImageUrl(settings.image), true);
+}
 
 let size: Size = 4;
 let board: Board;
@@ -96,7 +131,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) timer.pause();
 });
 
-newGameBtn.addEventListener('click', newGame);
+menuBtn.addEventListener('click', () => menu.open());
 window.addEventListener('resize', () => view.update(board));
 setInterval(renderHud, 250);
 
