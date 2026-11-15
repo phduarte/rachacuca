@@ -571,3 +571,73 @@ button:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .win-msg { animation: none; }
 }
+
+/* Telas largas (desktop, tablet deitado): o tabuleiro ocupa quase toda a
+   altura e sobraria só uma fresta para o placar. Ele vai para uma coluna ao
+   lado do tabuleiro, com a altura inteira dele para crescer. */
+@media (orientation: landscape) and (min-width: 900px) and (min-height: 480px) {
+  /* Esquerda: marca em cima do placar, os dois centrados na altura.
+     Direita: tabuleiro centrado na altura, menu no alto da tela. */
+  #app {
+    display: grid;
+    grid-template-columns: auto auto;
+    grid-template-rows: auto 1fr 1fr;
+    grid-template-areas:
+      '. menu'
+      'brand board'
+      'display board';
+    justify-content: center;
+    column-gap: clamp(24px, 4vw, 72px);
+    row-gap: 0;
+  }
+
+  /* A barra do topo some do layout: marca e menu viram células da grade. */
+  .top-bar {
+    display: contents;
+  }
+
+  .top-bar .menu-btn {
+    grid-area: menu;
+    position: static;
+    justify-self: end;
+    margin-top: 16px;
+  }
+
+  .brand-wrap {
+    grid-area: brand;
+    align-self: end;
+    justify-self: center;
+    margin-bottom: clamp(16px, 4dvh, 48px);
+  }
+
+  .display {
+    grid-area: display;
+    align-self: start;
+    width: clamp(240px, 28vw, 460px);
+    height: calc(min(100vw - 32px, 70dvh) / 2);
+    justify-content: flex-start;
+  }
+
+  .board {
+    grid-area: board;
+    align-self: center;
+    margin-bottom: 0;
+  }
+
+  /* Na coluna, o limite é a largura dela (cqw), não só a altura. */
+  .stat-label {
+    font-size: clamp(10px, min(4cqw, 4cqh), 18px);
+  }
+
+  .stat--time .stat-value {
+    font-size: clamp(24px, min(18cqw, 30cqh), 96px);
+  }
+
+  .stat--moves .stat-value {
+    font-size: clamp(18px, min(12cqw, 20cqh), 64px);
+  }
+
+  .status {
+    font-size: clamp(12px, 3.4cqw, 16px);
+  }
+}
