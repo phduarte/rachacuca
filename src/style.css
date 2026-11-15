@@ -253,6 +253,8 @@ body {
   font-weight: 700;
   font-size: calc(min(100vw - 32px, 70dvh) / var(--size) * 0.42);
   color: var(--text);
+  /* Contorno quando a paleta não chega a 4,5:1 (seção 3.1) */
+  text-shadow: var(--text-outline, none);
   background:
     linear-gradient(135deg, rgb(255 255 255 / 0.35), transparent 50%),
     var(--tile-face);
