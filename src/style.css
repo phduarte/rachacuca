@@ -68,6 +68,12 @@ body {
   top: 0;
 }
 
+.top-bar .pause-btn {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
 /* Marca: a altura acompanha a tela para não roubar espaço do placar */
 .brand {
   margin: 0;
@@ -300,6 +306,16 @@ button:focus-visible {
   width: 20px;
   height: 3px;
   background: var(--ui-text);
+}
+
+.pause-btn {
+  grid-auto-flow: column;
+  gap: 6px;
+}
+
+.pause-btn span {
+  width: 5px;
+  height: 18px;
 }
 
 .close-btn span {
@@ -632,6 +648,13 @@ button:focus-visible {
     display: contents;
   }
 
+  .top-bar .pause-btn {
+    grid-area: 1 / 1;
+    position: static;
+    justify-self: start;
+    margin-top: 16px;
+  }
+
   .top-bar .menu-btn {
     grid-area: menu;
     position: static;
@@ -716,4 +739,61 @@ button:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
   .rotate-hint-phone { animation: none; }
+}
+
+/* Tela de pausa (seção 10.2): cobre a tela toda, tabuleiro incluído */
+.pause {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  background:
+    repeating-linear-gradient(0deg, rgb(0 0 0 / 0.18) 0 2px, transparent 2px 4px),
+    var(--bg);
+}
+
+.pause[hidden] {
+  display: none;
+}
+
+.pause h2 {
+  margin: 0;
+  font-size: 32px;
+  letter-spacing: 4px;
+  color: var(--accent);
+  text-shadow: 0.1em 0.1em 0 rgb(0 0 0 / 0.6);
+  animation: pause-blink 1s steps(1) infinite;
+}
+
+@keyframes pause-blink {
+  50% { opacity: 0; }
+}
+
+.pause-info {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 1px;
+  opacity: 0.75;
+}
+
+.pause-actions {
+  width: min(100vw - 48px, 320px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pause-option {
+  min-height: 48px;
+  font-size: 14px;
+  letter-spacing: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pause h2 { animation: none; }
 }

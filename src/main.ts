@@ -8,12 +8,13 @@ import { VICTORY_TIMES, VictoryEffect } from './render/victory';
 import * as sfx from './audio/sfx';
 import { holdMusic, setMusic } from './audio/music';
 import { setupServiceWorker } from './pwa/sw';
-import { createRotateHint, keepAwake, setupFullscreen } from './pwa/fullscreen';
+import { createRotateHint, keepAwake, LANDSCAPE_PHONE, setupFullscreen } from './pwa/fullscreen';
 import { applyPalette, paletteById } from './theme/palettes';
 import { builtinImageUrl, fileImageUrl, photoFromFile } from './theme/images';
 import { loadPhoto, loadSettings, savePhoto, saveSettings } from './settings';
 import { createBrand } from './ui/brand';
 import { createMenu, createMenuButton } from './ui/menu';
+import { createPauseButton, createPauseScreen } from './ui/pause';
 
 // Bloqueios da seção 9.2 (menu de toque longo e pinça do iOS).
 document.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -50,9 +51,10 @@ status.setAttribute('aria-live', 'polite');
 // longe de toques acidentais), placar grande no meio (só leitura) e tabuleiro
 // embaixo, onde o polegar alcança.
 const menuBtn = createMenuButton();
+const pauseBtn = createPauseButton();
 const topBar = document.createElement('header');
 topBar.className = 'top-bar';
-topBar.append(createBrand(), menuBtn);
+topBar.append(pauseBtn, createBrand(), menuBtn);
 status.className = 'status';
 const display = document.createElement('section');
 display.className = 'display';
@@ -60,7 +62,10 @@ display.append(hud, status);
 
 const menuState = () => ({ ...settings, photo });
 const menu = createMenu(menuState, {
-  open: () => timer.pause(),
+  open() {
+    timer.pause();
+    pause();
+  },
   newGame: () => newGame(),
   palette(id) {
     settings.palette = id;
@@ -113,7 +118,12 @@ menu.el.addEventListener('click', (e) => {
 const victory = new VictoryEffect();
 victory.vibration = settings.vibration;
 let stopVictorySound = (): void => {};
-app.append(topBar, display, view.el, menu.el, victory.canvas, createRotateHint());
+const pauseScreen = createPauseScreen({
+  resume: () => resume(),
+  restart: () => newGame(seed),
+  menu: () => menu.open(),
+});
+app.append(topBar, display, view.el, pauseScreen.el, menu.el, victory.canvas, createRotateHint());
 setupFullscreen();
 /** Conta os pedidos de imagem para ignorar recortes que chegam atrasados. */
 let imageRequest = 0;
@@ -139,6 +149,10 @@ let moves = 0;
 let won = false;
 /** Contagem antes de embaralhar: o tabuleiro aparece montado e não aceita jogadas. */
 let starting = false;
+/** Pausa (seção 2.5): relógio parado, tabuleiro coberto, sem jogadas. */
+let paused = false;
+/** Semente da partida atual: REINICIAR recomeça a mesma posição. */
+let seed = 0;
 let gameId = 0;
 const timer = new Timer();
 
@@ -171,9 +185,12 @@ winMsg.className = 'win-msg';
 winMsg.setAttribute('role', 'status');
 winMsg.textContent = 'Rachou a Cuca!';
 
-function newGame(): void {
+function newGame(gameSeed = newSeed()): void {
   const id = ++gameId;
-  const shuffled = shuffle(size, newSeed());
+  seed = gameSeed;
+  const shuffled = shuffle(size, seed);
+  paused = false;
+  pauseScreen.hide();
   board = createBoard(size);
   moves = 0;
   won = false;
@@ -222,7 +239,7 @@ function newGame(): void {
 
 /** Toque, swipe ou tecla: roda já ou espera o deslize atual terminar. */
 function command(cmd: Command): void {
-  if (won || starting) return;
+  if (won || starting || paused) return;
   if (sliding) {
     if (queue.length < QUEUE_MAX) queue.push(cmd);
     return;
@@ -295,7 +312,7 @@ const DIR_VECTORS: Record<Direction, readonly [number, number]> = {
  * no eixo permitido. Solta depois de 40% do caminho, completa; antes, volta.
  */
 function dragStart(x: number, y: number): DragControl | null {
-  if (won || starting || sliding) return null;
+  if (won || starting || sliding || paused) return null;
   const result = moveAt(board, view.indexAt(x, y));
   if (!result) return null;
   const tiles = result.moved.map((m) => m.tile);
@@ -315,7 +332,7 @@ function dragStart(x: number, y: number): DragControl | null {
     },
     end(dx, dy) {
       view.release();
-      if (board !== from || won || starting) return false;
+      if (board !== from || won || starting || paused) return false;
       // Pouco movimento é toque: o tap faz o mesmo deslize.
       if (Math.hypot(dx, dy) < SWIPE_MIN_PX) return false;
       const along = dx * ux + dy * uy;
@@ -334,7 +351,28 @@ function dragStart(x: number, y: number): DragControl | null {
 
 /** Tela acesa só com a partida em jogo (seção 9.3). */
 function syncAwake(): void {
-  keepAwake(!won);
+  keepAwake(!won && !paused);
+}
+
+/** Pausa a partida em jogo; na contagem ou depois da vitória não há o que pausar. */
+function pause(): void {
+  if (won || starting || paused) return;
+  paused = true;
+  timer.pause();
+  queue.length = 0;
+  view.release();
+  renderHud();
+  pauseScreen.show(formatTime(timer.elapsedMs()), moves);
+  syncAwake();
+}
+
+function resume(): void {
+  if (!paused) return;
+  paused = false;
+  pauseScreen.hide();
+  // O relógio só volta se a partida já tinha começado (ele parte no 1º movimento).
+  if (moves > 0) timer.start();
+  syncAwake();
 }
 
 function renderHud(): void {
@@ -353,14 +391,26 @@ bindInput(view.el, {
   swipe: (dir) => command(() => moveDirection(board, dir)),
 });
 
-// Seção 2.5: pausa quando o app perde o foco.
+// Seção 2.5: perder o foco leva à pausa, e o jogo não volta a correr sozinho.
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) timer.pause();
+  if (document.hidden) {
+    timer.pause();
+    pause();
+  }
   // Sem música tocando com o app em segundo plano.
   holdMusic('hidden', document.hidden);
 });
 
 menuBtn.addEventListener('click', () => menu.open());
+pauseBtn.addEventListener('click', () => pause());
+// Esc pausa (seção 5). Com um diálogo aberto, o próprio Esc o fecha.
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !document.querySelector('dialog[open]')) pause();
+});
+// Celular deitado: o aviso "GIRE O APARELHO" cobre o jogo, então pausa.
+matchMedia(LANDSCAPE_PHONE).addEventListener('change', (e) => {
+  if (e.matches) pause();
+});
 window.addEventListener('resize', () => view.update(board));
 setInterval(renderHud, 250);
 
