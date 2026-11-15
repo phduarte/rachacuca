@@ -57,9 +57,12 @@ export class BoardView {
 
   /** Índice da casa sob um ponto da tela, ou -1. */
   indexAt(clientX: number, clientY: number): number {
+    // Área interna da moldura (sem o aro), onde ficam as peças.
     const rect = this.el.getBoundingClientRect();
-    const c = Math.floor(((clientX - rect.left) / rect.width) * this.size);
-    const r = Math.floor(((clientY - rect.top) / rect.height) * this.size);
+    const left = rect.left + this.el.clientLeft;
+    const top = rect.top + this.el.clientTop;
+    const c = Math.floor(((clientX - left) / this.el.clientWidth) * this.size);
+    const r = Math.floor(((clientY - top) / this.el.clientHeight) * this.size);
     if (r < 0 || c < 0 || r >= this.size || c >= this.size) return -1;
     return r * this.size + c;
   }
@@ -68,8 +71,8 @@ export class BoardView {
   private gapPct(): number {
     const side = this.el.clientWidth;
     if (!side) return 0;
-    const gap = 3;
-    const tile = (side - gap * 2) / this.size - gap;
+    const gap = parseFloat(getComputedStyle(this.el).getPropertyValue('--gap')) || 0;
+    const tile = (side - gap) / this.size - gap;
     return (gap / tile) * 100;
   }
 }

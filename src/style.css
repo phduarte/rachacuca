@@ -1,18 +1,23 @@
 /* Seção 9.2: sem rolagem, sem zoom, sem seleção; seção 3.1: tokens da paleta. */
 :root {
-  --bg: #1d2b53;
-  --frame: #000020;
-  --tile-face: #29adff;
-  --tile-edge-light: #9fdcff;
-  --tile-edge-dark: #0b5d8f;
-  --text: #fff1e8;
-  --accent: #ff004d;
+  /* Tema padrão: o Racha Cuca de plástico (moldura vermelha, peças brancas).
+     As paletas da seção 3.1 sobrescrevem estes tokens. */
+  --bg: #1b1b24;
+  --ui-text: #f4f1ea;
+  --frame: #b51d14; /* fundo da moldura, visível na casa vazia */
+  --bezel: #d9271c; /* aro de plástico */
+  --tile-face: #f7f5f0;
+  --tile-edge-light: #ffffff;
+  --tile-edge-dark: #cdc8bd;
+  --text: #141414;
+  --accent: #d9271c;
   --glow: #29adff;
 
-  --gap: 3px;
+  --gap: 2px;
   --slide-ms: 110ms;
   --slide-ease: cubic-bezier(0.2, 0.9, 0.3, 1.2);
   --font: 'Press Start 2P', ui-monospace, 'Courier New', monospace;
+  --tile-font: 'Arial Rounded MT Bold', 'Helvetica Neue', Arial, sans-serif;
 }
 
 *,
@@ -29,7 +34,7 @@ body {
   overflow: hidden;
   overscroll-behavior: none;
   background: var(--bg);
-  color: var(--text);
+  color: var(--ui-text);
   font-family: var(--font);
   touch-action: manipulation;
   user-select: none;
@@ -44,15 +49,68 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 16px;
+}
+
+/* Topo: NOVO JOGO (zona de esticar o dedo) */
+.top-bar {
+  width: min(100vw - 32px, 70dvh);
+  margin-top: 16px;
+  display: flex;
+  justify-content: center;
+}
+
+/* Meio: placar grande, só leitura; ocupa o espaço livre e empurra o tabuleiro para baixo */
+.display {
+  flex: 1;
+  min-height: 0;
+  width: min(100vw - 32px, 70dvh);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 2dvh, 24px);
 }
 
 .hud {
   display: flex;
-  gap: 24px;
-  font-size: 16px;
-  letter-spacing: 1px;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(8px, 2.5dvh, 28px);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.stat-label {
+  font-size: clamp(10px, 1.6dvh, 14px);
+  letter-spacing: 2px;
+  opacity: 0.6;
+}
+
+.stat-value {
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: 2px;
+}
+
+.stat--time .stat-value {
+  font-size: clamp(32px, min(16vw, 11dvh), 96px);
+}
+
+.stat--moves .stat-value {
+  font-size: clamp(24px, min(10vw, 7dvh), 64px);
+  color: color-mix(in srgb, var(--accent), #fff 35%);
+}
+
+.status {
+  font-size: 14px;
+  text-align: center;
+  min-height: 1em;
 }
 
 .board {
@@ -60,10 +118,60 @@ body {
   /* Seção 10.2: lado = menor entre largura − 32 px e 70% da altura */
   width: min(100vw - 32px, 70dvh);
   aspect-ratio: 1;
+  flex: none;
+  /* Afastado da borda inferior: os cantos de baixo são a zona "ow" do polegar */
+  margin-bottom: max(24px, 5dvh);
   position: relative;
-  background: var(--frame);
-  padding: var(--gap);
   touch-action: none;
+
+  /* Moldura de plástico como a do brinquedo: aro largo e plano com a quina
+     elevada, fundo rebaixado onde as peças correm e, no canto inferior
+     direito do fundo, o anel moldado que aparece quando a casa vazia está lá. */
+  --bezel-w: clamp(16px, 6vmin, 40px);
+  --cell: calc((100% - var(--gap)) / var(--size) - var(--gap));
+  border: var(--bezel-w) solid transparent;
+  border-radius: calc(var(--bezel-w) * 0.45);
+  background:
+    /* anel moldado no fundo */
+    radial-gradient(
+        circle,
+        color-mix(in srgb, var(--frame), #000 35%) 0 29%,
+        color-mix(in srgb, var(--frame), #000 15%) 30% 35%,
+        color-mix(in srgb, var(--frame), #fff 12%) 36% 43%,
+        color-mix(in srgb, var(--frame), #000 25%) 44% 49%,
+        transparent 50%
+      )
+      right var(--gap) bottom var(--gap) / var(--cell) var(--cell) no-repeat padding-box,
+    /* fundo */
+    linear-gradient(var(--frame), var(--frame)) padding-box,
+    /* aro */
+    linear-gradient(
+        160deg,
+        color-mix(in srgb, var(--bezel), #fff 14%),
+        var(--bezel) 40%,
+        color-mix(in srgb, var(--bezel), #000 18%)
+      )
+      border-box;
+  box-shadow:
+    /* espessura do plástico e sombra na mesa */
+    0 4px 0 color-mix(in srgb, var(--bezel), #000 45%),
+    0 14px 24px rgb(0 0 0 / 0.5),
+    /* degrau do aro descendo para o fundo */
+    inset 3px 3px 0 color-mix(in srgb, var(--frame), #000 45%),
+    inset -2px -2px 0 color-mix(in srgb, var(--bezel), #fff 25%);
+}
+
+/* Quina externa elevada do aro */
+.board::before {
+  content: '';
+  position: absolute;
+  inset: calc(var(--bezel-w) * -1);
+  border-radius: inherit;
+  box-shadow:
+    inset 2px 2px 0 color-mix(in srgb, var(--bezel), #fff 40%),
+    inset -2px -2px 0 color-mix(in srgb, var(--bezel), #000 35%),
+    inset 0 0 0 calc(var(--bezel-w) * 0.22) color-mix(in srgb, var(--bezel), #fff 6%);
+  pointer-events: none;
 }
 
 .board.bump-left { animation: bump-left 180ms ease-out; }
@@ -80,18 +188,21 @@ body {
   position: absolute;
   top: var(--gap);
   left: var(--gap);
-  width: calc((100% - var(--gap) * 2) / var(--size) - var(--gap));
-  height: calc((100% - var(--gap) * 2) / var(--size) - var(--gap));
+  width: calc((100% - var(--gap)) / var(--size) - var(--gap));
+  height: calc((100% - var(--gap)) / var(--size) - var(--gap));
   display: grid;
   place-items: center;
-  font-size: clamp(12px, 5vmin, 32px);
+  font-family: var(--tile-font);
+  font-weight: 700;
+  font-size: calc(min(100vw - 32px, 70dvh) / var(--size) * 0.42);
   color: var(--text);
   background:
-    linear-gradient(135deg, rgb(255 255 255 / 0.08), transparent 50%),
+    linear-gradient(135deg, rgb(255 255 255 / 0.35), transparent 50%),
     var(--tile-face);
   box-shadow:
-    inset 3px 3px 0 var(--tile-edge-light),
-    inset -3px -3px 0 var(--tile-edge-dark);
+    inset 2px 2px 0 var(--tile-edge-light),
+    inset -2px -2px 0 var(--tile-edge-dark),
+    1px 1px 2px rgb(0 0 0 / 0.35);
   transition: transform var(--slide-ms) var(--slide-ease);
   will-change: transform;
 }
@@ -99,9 +210,9 @@ body {
 button {
   font: inherit;
   font-size: 12px;
-  color: var(--text);
+  color: var(--ui-text);
   background: var(--frame);
-  border: 3px solid var(--tile-face);
+  border: 3px solid var(--bezel);
   min-height: 44px;
   padding: 0 16px;
   cursor: pointer;
