@@ -1,7 +1,10 @@
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import pkg from './package.json' with { type: 'json' };
 
 export default defineConfig({
+  // Versão exibida abaixo da marca (src/ui/brand.ts).
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   base: '/rachacuca/', // GitHub Pages: https://phduarte.github.io/rachacuca/
   plugins: [
     VitePWA({

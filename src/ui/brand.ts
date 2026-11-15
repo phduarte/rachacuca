@@ -1,8 +1,11 @@
 /**
  * Marca do jogo. A imagem vem de public/brand/logo.webp, gerada por
  * scripts/make-logo.py a partir de assets/brand/racha-cuca-original.jpg.
+ * Logo abaixo, a versão do package.json (injetada pelo Vite).
  */
-export function createBrand(): HTMLHeadingElement {
+export function createBrand(): HTMLDivElement {
+  const wrap = document.createElement('div');
+  wrap.className = 'brand-wrap';
   const brand = document.createElement('h1');
   brand.className = 'brand';
   const img = document.createElement('img');
@@ -13,5 +16,9 @@ export function createBrand(): HTMLHeadingElement {
   img.draggable = false;
   img.decoding = 'async';
   brand.append(img);
-  return brand;
+  const version = document.createElement('small');
+  version.className = 'version';
+  version.textContent = `v${__APP_VERSION__}`;
+  wrap.append(brand, version);
+  return wrap;
 }
