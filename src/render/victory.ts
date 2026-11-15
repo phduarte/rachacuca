@@ -15,6 +15,9 @@ const SETTLE_END = 3600; // brasas caindo
 const REVEAL_AT = BLAST_END - 250; // mensagem aparece com o clarão sumindo
 const SKIP_AFTER = 300; // toques antes disso não pulam (é o próprio lance final)
 
+/** Linha do tempo para o som acompanhar a imagem (seção 7.2). */
+export const VICTORY_TIMES = { propStart: SHADE_END, propEnd: PROP_END, blastAt: OVERLOAD_END } as const;
+
 const SHADE_ALPHA = 0.72;
 const MAX_PARTICLES = 400;
 const GRAVITY = 900; // px/s²
@@ -46,6 +49,8 @@ export interface VictoryCallbacks {
 
 export class VictoryEffect {
   readonly canvas: HTMLCanvasElement;
+  /** Vibrar na explosão (opção do jogador). */
+  vibration = true;
   private ctx: CanvasRenderingContext2D;
   private raf = 0;
   private start = 0;
@@ -346,7 +351,7 @@ export class VictoryEffect {
         const a = (i / k) * Math.PI * 2 + rand(-0.2, 0.2);
         this.bolts.push([a, reach]);
       }
-      navigator.vibrate?.([20, 40, 20, 40, 120]);
+      if (this.vibration) navigator.vibrate?.([20, 40, 20, 40, 120]);
     }
   }
 

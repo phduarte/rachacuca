@@ -1,5 +1,5 @@
 /**
- * Preferências do jogador (paleta e imagem), guardadas no aparelho.
+ * Preferências do jogador (paleta, imagem, som e vibração), guardadas no aparelho.
  * Tudo em try/catch: em aba anônima ou com armazenamento bloqueado o jogo
  * segue com os padrões.
  */
@@ -7,11 +7,15 @@ export interface Settings {
   palette: string;
   /** 'none' (só números), id de imagem embarcada ou 'user' (foto do jogador). */
   image: string;
+  /** Volume dos efeitos, de 0 (desligado) a 3 (alto). */
+  volume: number;
+  /** Vibração no impacto das peças (Android). */
+  vibration: boolean;
 }
 
 const KEY = 'rachacuca:settings';
 const PHOTO_KEY = 'rachacuca:photo';
-const DEFAULTS: Settings = { palette: 'brinquedo', image: 'none' };
+const DEFAULTS: Settings = { palette: 'brinquedo', image: 'none', volume: 2, vibration: true };
 
 export function loadSettings(): Settings {
   try {

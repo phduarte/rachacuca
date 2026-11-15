@@ -14,7 +14,9 @@ export class BoardView {
     this.el.className = 'board';
     this.el.setAttribute('role', 'grid');
     this.el.setAttribute('aria-label', 'Tabuleiro');
-    this.el.addEventListener('animationend', () => this.el.classList.remove(...BUMP_CLASSES));
+    this.el.addEventListener('animationend', (e) => {
+      if (e.target === this.el) this.el.classList.remove(...BUMP_CLASSES, 'bump-strong');
+    });
   }
 
   /** Recria as peças para um tabuleiro novo. */
@@ -63,11 +65,61 @@ export class BoardView {
     });
   }
 
-  /** Balanço do tabuleiro no sentido do deslize (seção 6.1). */
-  bump(dir: Direction): void {
-    this.el.classList.remove(...BUMP_CLASSES);
+  /**
+   * Embaralhada animada (seção 3.3): cada peça voa até a casa sorteada com
+   * um atraso aleatório de até `maxDelayMs`, para não saírem todas juntas.
+   */
+  scatter(board: Board, maxDelayMs: number): void {
+    for (const t of this.tileEls.values()) t.style.transitionDelay = `${Math.round(Math.random() * maxDelayMs)}ms`;
+    this.update(board);
+  }
+
+  /** Tira os atrasos da embaralhada. */
+  settle(): void {
+    for (const t of this.tileEls.values()) t.style.transitionDelay = '';
+  }
+
+  /**
+   * Arrastar (seção 5): desloca as peças `tiles` em (dx, dy) px a partir da
+   * casa atual, sem transição, seguindo o dedo.
+   */
+  drag(tiles: readonly number[], dx: number, dy: number): void {
+    for (const tile of tiles) {
+      const t = this.tileEls.get(tile);
+      if (!t) continue;
+      t.classList.add('dragging');
+      t.style.translate = `${dx}px ${dy}px`;
+    }
+  }
+
+  /**
+   * Solta as peças arrastadas. A volta do deslocamento é animada junto com o
+   * `transform`; se o movimento foi aceito (update logo depois), a peça
+   * continua de onde o dedo largou até a casa nova.
+   */
+  release(): void {
+    for (const t of this.tileEls.values()) {
+      if (!t.classList.contains('dragging')) continue;
+      t.classList.remove('dragging');
+      t.style.translate = '';
+    }
+  }
+
+  /** Distância em px de uma casa até a vizinha (peça + fresta). */
+  pitch(): number {
+    const gap = parseFloat(getComputedStyle(this.el).getPropertyValue('--gap')) || 0;
+    return (this.el.clientWidth - gap) / this.size;
+  }
+
+  /**
+   * Balanço do tabuleiro no sentido do deslize (seção 6.1): 2 px, ou 3 px
+   * (`strong`) num deslize em fila de 3 peças ou mais.
+   */
+  bump(dir: Direction, strong = false): void {
+    this.el.classList.remove(...BUMP_CLASSES, 'bump-strong');
     void this.el.offsetWidth; // reinicia a animação
     this.el.classList.add(`bump-${dir}`);
+    if (strong) this.el.classList.add('bump-strong');
   }
 
   /** Índice da casa sob um ponto da tela, ou -1. */

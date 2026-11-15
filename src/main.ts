@@ -1,10 +1,11 @@
 import './style.css';
-import { createBoard, isSolved, moveAt, moveDirection, type Board, type MoveResult, type Size } from './core/board';
+import { createBoard, isSolved, moveAt, moveDirection, type Board, type Direction, type MoveResult, type Size } from './core/board';
 import { newSeed, shuffle } from './core/shuffle';
 import { formatTime, Timer } from './core/timer';
 import { BoardView } from './render/boardView';
-import { bindInput } from './render/input';
-import { VictoryEffect } from './render/victory';
+import { bindInput, SWIPE_MIN_PX, type DragControl } from './render/input';
+import { VICTORY_TIMES, VictoryEffect } from './render/victory';
+import * as sfx from './audio/sfx';
 import { setupServiceWorker } from './pwa/sw';
 import { applyPalette, paletteById } from './theme/palettes';
 import { builtinImageUrl, fileImageUrl, photoFromFile } from './theme/images';
@@ -55,7 +56,8 @@ const display = document.createElement('section');
 display.className = 'display';
 display.append(hud, status);
 
-const menu = createMenu(() => ({ palette: settings.palette, image: settings.image, photo }), {
+const menuState = () => ({ ...settings, photo });
+const menu = createMenu(menuState, {
   open: () => timer.pause(),
   newGame: () => newGame(),
   palette(id) {
@@ -75,9 +77,34 @@ const menu = createMenu(() => ({ palette: settings.palette, image: settings.imag
     saveSettings(settings);
     applyImage();
   },
+  volume(level) {
+    settings.volume = level;
+    saveSettings(settings);
+    sfx.setVolume(level);
+  },
+  vibration(on) {
+    settings.vibration = on;
+    victory.vibration = on;
+    saveSettings(settings);
+    if (on) navigator.vibrate?.(8);
+  },
+});
+
+sfx.setVolume(settings.volume);
+// Seção 6.2: o AudioContext só toca depois de um gesto do jogador (iOS e
+// Chrome). Retomar é barato, então todo toque tenta (o iOS suspende o áudio
+// ao trocar de app).
+for (const type of ['pointerdown', 'pointerup', 'keydown'] as const) {
+  window.addEventListener(type, sfx.unlockAudio, { capture: true, passive: true });
+}
+// Bipe ao navegar no menu (seção 6.3).
+menu.el.addEventListener('click', (e) => {
+  if ((e.target as HTMLElement).closest('button')) sfx.beep();
 });
 
 const victory = new VictoryEffect();
+victory.vibration = settings.vibration;
+let stopVictorySound = (): void => {};
 app.append(topBar, display, view.el, menu.el, victory.canvas);
 /** Conta os pedidos de imagem para ignorar recortes que chegam atrasados. */
 let imageRequest = 0;
@@ -108,7 +135,23 @@ const timer = new Timer();
 
 const COUNTDOWN_FROM = 3;
 const COUNTDOWN_STEP_MS = 800;
+/** Voo das peças ao embaralhar: 600 ms cada, com até 300 ms de atraso (seção 3.3). */
 const SHUFFLE_MS = 600;
+const SHUFFLE_STAGGER_MS = 300;
+/** Duração do deslize (--slide-ms no CSS): o impacto acontece no fim. */
+const SLIDE_MS = 110;
+/** Arrasto: completa se passou de 40% do caminho (seção 5)... */
+const DRAG_COMMIT = 0.4;
+/** ...ou se foi um peteleco rápido, como um swipe. */
+const FLICK_MS = 250;
+/** Fila de comandos durante a animação (seção 5). */
+const QUEUE_MAX = 2;
+
+/** Um comando é avaliado só na hora de rodar, sobre o tabuleiro daquele momento. */
+type Command = () => MoveResult | null;
+const queue: Command[] = [];
+/** Peças em movimento: novos comandos entram na fila. */
+let sliding = false;
 
 const countdown = document.createElement('div');
 countdown.className = 'countdown';
@@ -128,6 +171,9 @@ function newGame(): void {
   starting = true;
   status.textContent = '';
   victory.cancel();
+  stopVictorySound();
+  queue.length = 0;
+  sliding = false;
   winMsg.remove();
   timer.reset();
   view.mount(board);
@@ -151,33 +197,121 @@ function newGame(): void {
     countdown.remove();
     board = shuffled;
     view.el.classList.add('shuffling');
-    view.update(board);
+    view.scatter(board, SHUFFLE_STAGGER_MS);
+    sfx.rattle(SHUFFLE_MS);
     setTimeout(() => {
       if (id !== gameId) return;
       view.el.classList.remove('shuffling');
+      view.settle();
       starting = false;
-    }, SHUFFLE_MS);
+    }, SHUFFLE_MS + SHUFFLE_STAGGER_MS);
   };
   tick();
 }
 
-function apply(result: MoveResult | null): void {
-  if (!result || won || starting) return;
+/** Toque, swipe ou tecla: roda já ou espera o deslize atual terminar. */
+function command(cmd: Command): void {
+  if (won || starting) return;
+  if (sliding) {
+    if (queue.length < QUEUE_MAX) queue.push(cmd);
+    return;
+  }
+  run(cmd);
+}
+
+function run(cmd: Command): void {
+  const result = cmd();
+  if (result) apply(result);
+  else sfx.thud();
+}
+
+function apply(result: MoveResult): void {
   if (!timer.running) timer.start();
   board = result.board;
   moves += result.moved.length;
   view.update(board);
-  view.bump(result.direction);
   renderHud();
-  if (isSolved(board)) {
+  const solved = isSolved(board);
+  if (solved) {
     won = true;
     timer.pause();
+    queue.length = 0;
     renderHud();
+  }
+  sliding = true;
+  const id = gameId;
+  setTimeout(() => {
+    if (id !== gameId) return;
+    sliding = false;
+    impact(result, solved);
+    const next = queue.shift();
+    if (next && !won) run(next);
+  }, SLIDE_MS);
+}
+
+/** Fim do deslize: balanço, estalo e vibração (seção 6), ou a vitória (seção 7). */
+function impact(result: MoveResult, solved: boolean): void {
+  if (settings.vibration) navigator.vibrate?.(8);
+  if (solved) {
+    view.bump(result.direction, true);
+    stopVictorySound = sfx.victory(VICTORY_TIMES);
     victory.play(view.el, size, {
       reveal: () => view.el.append(winMsg),
-      done: () => {},
+      done: () => stopVictorySound(),
     });
+    return;
   }
+  view.bump(result.direction, result.moved.length >= 3);
+  sfx.slide(result.moved.length);
+}
+
+const DIR_VECTORS: Record<Direction, readonly [number, number]> = {
+  up: [0, -1],
+  down: [0, 1],
+  left: [-1, 0],
+  right: [1, 0],
+};
+
+/**
+ * Arrastar (seção 5): a peça (e as da fila até a casa vazia) segue o dedo
+ * no eixo permitido. Solta depois de 40% do caminho, completa; antes, volta.
+ */
+function dragStart(x: number, y: number): DragControl | null {
+  if (won || starting || sliding) return null;
+  const result = moveAt(board, view.indexAt(x, y));
+  if (!result) return null;
+  const tiles = result.moved.map((m) => m.tile);
+  const [ux, uy] = DIR_VECTORS[result.direction];
+  const pitch = view.pitch();
+  const from = board;
+  const t0 = performance.now();
+  let dragging = false;
+  return {
+    move(dx, dy) {
+      if (board !== from) return;
+      const along = Math.max(0, Math.min(pitch, dx * ux + dy * uy));
+      // Tremidinha de toque não vira arrasto.
+      if (!dragging && along < 4) return;
+      dragging = true;
+      view.drag(tiles, ux * along, uy * along);
+    },
+    end(dx, dy) {
+      view.release();
+      if (board !== from || won || starting) return false;
+      // Pouco movimento é toque: o tap faz o mesmo deslize.
+      if (Math.hypot(dx, dy) < SWIPE_MIN_PX) return false;
+      const along = dx * ux + dy * uy;
+      const across = Math.abs(dx * uy - dy * ux);
+      // Foi para outro eixo ou para trás: vira swipe.
+      if (along <= 0 || across > along) return false;
+      const flick = performance.now() - t0 < FLICK_MS;
+      if (along >= pitch * DRAG_COMMIT || flick) command(() => (board === from ? result : null));
+      return true;
+    },
+    cancel() {
+      view.release();
+    },
+  };
 }
 
 function renderHud(): void {
@@ -186,8 +320,14 @@ function renderHud(): void {
 }
 
 bindInput(view.el, {
-  tap: (x, y) => apply(moveAt(board, view.indexAt(x, y))),
-  swipe: (dir) => apply(moveDirection(board, dir)),
+  dragStart,
+  tap(x, y) {
+    const i = view.indexAt(x, y);
+    // Toque na moldura ou na casa vazia não é jogada.
+    if (i < 0 || board.tiles[i] === 0) return;
+    command(() => moveAt(board, i));
+  },
+  swipe: (dir) => command(() => moveDirection(board, dir)),
 });
 
 // Seção 2.5: pausa quando o app perde o foco.

@@ -1,6 +1,6 @@
 /**
- * Botão de menu (sanduíche) e tela de opções: novo jogo, cor do mini-game
- * e imagem das peças. As escolhas valem na hora; fechar volta ao jogo.
+ * Botão de menu (sanduíche) e tela de opções: novo jogo, cor do mini-game,
+ * imagem das peças, volume e vibração. As escolhas valem na hora; fechar volta ao jogo.
  */
 import { PALETTES, type Palette } from '../theme/palettes';
 import { BUILTIN_IMAGES, FILE_IMAGES, builtinImageUrl } from '../theme/images';
@@ -9,6 +9,8 @@ export interface MenuState {
   palette: string;
   image: string;
   photo: string | null;
+  volume: number;
+  vibration: boolean;
 }
 
 export interface MenuHandlers {
@@ -18,7 +20,12 @@ export interface MenuHandlers {
   image(id: string): void;
   /** Recebe o arquivo escolhido; resolve quando a foto já está em uso. */
   photo(file: File): Promise<void>;
+  /** Nível de 0 (mudo) a 3 (alto). */
+  volume(level: number): void;
+  vibration(on: boolean): void;
 }
+
+const VOLUME_NAMES = ['MUDO', 'BAIXO', 'MÉDIO', 'ALTO'];
 
 export function createMenuButton(): HTMLButtonElement {
   const btn = document.createElement('button');
@@ -64,9 +71,19 @@ export function createMenu(state: () => MenuState, h: MenuHandlers): { el: HTMLD
   uploadBtn.textContent = 'ENVIAR FOTO';
   images.append(imageGrid, uploadBtn, fileInput);
 
+  const sound = section('SOM');
+  const volumeGrid = grid('levels');
+  sound.append(volumeGrid);
+
+  // A API de vibração não existe no iOS: a opção só aparece onde funciona.
+  const vibration = section('VIBRAÇÃO');
+  const vibrationGrid = grid('toggle');
+  vibration.append(vibrationGrid);
+  vibration.hidden = !('vibrate' in navigator);
+
   const body = document.createElement('div');
   body.className = 'menu-body';
-  body.append(newGameBtn, colors, images);
+  body.append(newGameBtn, colors, images, sound, vibration);
   dlg.append(header, body);
 
   function render(): void {
@@ -80,6 +97,20 @@ export function createMenu(state: () => MenuState, h: MenuHandlers): { el: HTMLD
     if (s.photo) opts.push({ id: 'user', name: 'SUA FOTO', url: s.photo });
     imageGrid.replaceChildren(...opts.map((o) => picture(o.id, o.name, o.url, o.id === s.image)));
     uploadBtn.textContent = s.photo ? 'TROCAR FOTO' : 'ENVIAR FOTO';
+    volumeGrid.replaceChildren(
+      ...VOLUME_NAMES.map((name, level) => {
+        const b = option(name, level === s.volume);
+        b.dataset.volume = String(level);
+        return b;
+      }),
+    );
+    vibrationGrid.replaceChildren(
+      ...[true, false].map((on) => {
+        const b = option(on ? 'LIGADA' : 'DESLIGADA', on === s.vibration);
+        b.dataset.vibration = String(on);
+        return b;
+      }),
+    );
   }
 
   function swatch(p: Palette, selected: boolean): HTMLButtonElement {
@@ -121,6 +152,18 @@ export function createMenu(state: () => MenuState, h: MenuHandlers): { el: HTMLD
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-image]');
     if (!b) return;
     h.image(b.dataset.image!);
+    render();
+  });
+  volumeGrid.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-volume]');
+    if (!b) return;
+    h.volume(Number(b.dataset.volume));
+    render();
+  });
+  vibrationGrid.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-vibration]');
+    if (!b) return;
+    h.vibration(b.dataset.vibration === 'true');
     render();
   });
   uploadBtn.addEventListener('click', () => fileInput.click());
