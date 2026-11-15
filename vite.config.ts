@@ -13,6 +13,8 @@ export default defineConfig({
       manifest: false, // usamos public/manifest.webmanifest (seção 9.1)
       workbox: {
         globPatterns: ['**/*.{html,js,css,woff2,png,jpg,jpeg,gif,avif,webp,svg,webmanifest}'],
+        // As telas de abertura do iOS ficam com o próprio iOS ao instalar; não pesam no pré-cache.
+        globIgnores: ['**/splash/**'],
       },
     }),
   ],
