@@ -13,16 +13,24 @@ export interface Settings {
   vibration: boolean;
   /** Música chiptune de fundo (padrão desligada). */
   music: boolean;
+  /** Lado do tabuleiro (seção 2.1): 3 a 6. */
+  size: 3 | 4 | 5 | 6;
+  /** O 6 × 6 "Insano" é liberado ao vencer um 5 × 5 (seção 2.1). */
+  unlocked6: boolean;
 }
 
 const KEY = 'rachacuca:settings';
 const PHOTO_KEY = 'rachacuca:photo';
-const DEFAULTS: Settings = { palette: 'brinquedo', image: 'none', volume: 2, vibration: true, music: false };
+const DEFAULTS: Settings = { palette: 'brinquedo', image: 'none', volume: 2, vibration: true, music: false, size: 4, unlocked6: false };
 
 export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...DEFAULTS, ...(JSON.parse(raw) as Partial<Settings>) };
+    if (raw) {
+      const s = { ...DEFAULTS, ...(JSON.parse(raw) as Partial<Settings>) };
+      if (![3, 4, 5, 6].includes(s.size) || (s.size === 6 && !s.unlocked6)) s.size = DEFAULTS.size;
+      return s;
+    }
   } catch {
     /* sem armazenamento */
   }

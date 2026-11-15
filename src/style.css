@@ -888,3 +888,12 @@ button:focus-visible {
   opacity: 0.75;
   color: inherit;
 }
+
+/* Tamanho do tabuleiro: dimensão grande e o nome do modo embaixo */
+.option-grid--sizes {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.size-dim {
+  font-size: 16px;
+}

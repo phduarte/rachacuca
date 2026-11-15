@@ -67,6 +67,11 @@ let applyUpdate: (() => void) | null = null;
 const menuState = () => ({ ...settings, photo, install: installMode(), update: !!applyUpdate });
 const installHint = createInstallHint();
 const menu = createMenu(menuState, {
+  size(n) {
+    settings.size = n;
+    saveSettings(settings);
+    newGame();
+  },
   open() {
     timer.pause();
     pause();
@@ -160,7 +165,7 @@ function applyImage(): void {
   );
 }
 
-let size: Size = 4;
+let size: Size = settings.size;
 let board: Board;
 let moves = 0;
 let won = false;
@@ -204,6 +209,7 @@ winMsg.textContent = 'Rachou a Cuca!';
 
 function newGame(gameSeed = newSeed()): void {
   const id = ++gameId;
+  size = settings.size;
   seed = gameSeed;
   const shuffled = shuffle(size, seed);
   paused = false;
@@ -279,6 +285,11 @@ function apply(result: MoveResult): void {
   const solved = isSolved(board);
   if (solved) {
     won = true;
+    // Vencer um 5 × 5 libera o 6 × 6 "Insano" (seção 2.1).
+    if (size === 5 && !settings.unlocked6) {
+      settings.unlocked6 = true;
+      saveSettings(settings);
+    }
     timer.pause();
     queue.length = 0;
     renderHud();

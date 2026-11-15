@@ -7,6 +7,8 @@ import { BUILTIN_IMAGES, FILE_IMAGES, builtinImageUrl } from '../theme/images';
 import { creditsList } from './credits';
 
 export interface MenuState {
+  size: number;
+  unlocked6: boolean;
   palette: string;
   image: string;
   photo: string | null;
@@ -22,6 +24,8 @@ export interface MenuState {
 export interface MenuHandlers {
   open(): void;
   newGame(): void;
+  /** Troca o tamanho e começa uma partida nova. */
+  size(n: 3 | 4 | 5 | 6): void;
   palette(id: string): void;
   image(id: string): void;
   /** Recebe o arquivo escolhido; resolve quando a foto já está em uso. */
@@ -36,6 +40,14 @@ export interface MenuHandlers {
 }
 
 const VOLUME_NAMES = ['MUDO', 'BAIXO', 'MÉDIO', 'ALTO'];
+
+/** Tamanhos da seção 2.1. */
+export const SIZE_OPTIONS = [
+  { n: 3, name: 'JOGO DO 8' },
+  { n: 4, name: 'JOGO DO 15' },
+  { n: 5, name: 'RACHA CUCA 24' },
+  { n: 6, name: 'INSANO' },
+] as const;
 
 export function createMenuButton(): HTMLButtonElement {
   const btn = document.createElement('button');
@@ -73,6 +85,10 @@ export function createMenu(
   const newGameBtn = document.createElement('button');
   newGameBtn.className = 'menu-primary';
   newGameBtn.textContent = 'NOVO JOGO';
+
+  const sizes = section('TAMANHO');
+  const sizeGrid = grid('sizes');
+  sizes.append(sizeGrid);
 
   const colors = section('COR DO MINI-GAME');
   const colorGrid = grid('swatches');
@@ -112,13 +128,26 @@ export function createMenu(
 
   const body = document.createElement('div');
   body.className = 'menu-body';
-  body.append(updateBtn, newGameBtn, colors, images, sound, music, vibration, installBtn, credits);
+  body.append(updateBtn, newGameBtn, sizes, colors, images, sound, music, vibration, installBtn, credits);
   dlg.append(header, body);
 
   function render(): void {
     const s = state();
     installBtn.hidden = !s.install;
     updateBtn.hidden = !s.update;
+    sizeGrid.replaceChildren(
+      ...SIZE_OPTIONS.map(({ n, name }) => {
+        const locked = n === 6 && !s.unlocked6;
+        const b = option(locked ? 'VENÇA UM 5 × 5' : name, n === s.size);
+        b.dataset.size = String(n);
+        b.disabled = locked;
+        const dim = document.createElement('span');
+        dim.className = 'size-dim';
+        dim.textContent = `${n}×${n}`;
+        b.prepend(dim);
+        return b;
+      }),
+    );
     colorGrid.replaceChildren(...PALETTES.map((p) => swatch(p, p.id === s.palette)));
     const opts: Array<{ id: string; name: string; url: string | null }> = [
       { id: 'none', name: 'NÚMEROS', url: null },
@@ -180,6 +209,14 @@ export function createMenu(
     return b;
   }
 
+  sizeGrid.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-size]');
+    if (!b || b.disabled) return;
+    const n = Number(b.dataset.size) as 3 | 4 | 5 | 6;
+    if (n === state().size) return;
+    dlg.close();
+    h.size(n);
+  });
   colorGrid.addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-palette]');
     if (!b) return;
