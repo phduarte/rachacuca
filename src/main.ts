@@ -8,6 +8,7 @@ import { VICTORY_TIMES, VictoryEffect } from './render/victory';
 import * as sfx from './audio/sfx';
 import { holdMusic, setMusic } from './audio/music';
 import { setupServiceWorker } from './pwa/sw';
+import { createRotateHint, setupFullscreen } from './pwa/fullscreen';
 import { applyPalette, paletteById } from './theme/palettes';
 import { builtinImageUrl, fileImageUrl, photoFromFile } from './theme/images';
 import { loadPhoto, loadSettings, savePhoto, saveSettings } from './settings';
@@ -112,7 +113,8 @@ menu.el.addEventListener('click', (e) => {
 const victory = new VictoryEffect();
 victory.vibration = settings.vibration;
 let stopVictorySound = (): void => {};
-app.append(topBar, display, view.el, menu.el, victory.canvas);
+app.append(topBar, display, view.el, menu.el, victory.canvas, createRotateHint());
+setupFullscreen();
 /** Conta os pedidos de imagem para ignorar recortes que chegam atrasados. */
 let imageRequest = 0;
 
