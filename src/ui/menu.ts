@@ -161,8 +161,15 @@ export function createMenu(
         return b;
       }),
     );
-    colorGrid.replaceChildren(...PALETTES.map((p) => swatch(p, p.id === s.palette)));
+    const random = option('SORTEAR', s.palette === 'random');
+    random.dataset.palette = 'random';
+    const dice = document.createElement('span');
+    dice.className = 'swatch-chip swatch-chip--random';
+    dice.textContent = '?';
+    random.prepend(dice);
+    colorGrid.replaceChildren(random, ...PALETTES.map((p) => swatch(p, p.id === s.palette)));
     const opts: Array<{ id: string; name: string; url: string | null }> = [
+      { id: 'random', name: 'SORTEAR', url: null },
       { id: 'none', name: 'NÚMEROS', url: null },
       ...ORIGINAL_IMAGES.map((i) => ({ id: i.id, name: i.name, url: originalImageUrl(i.id) })),
       ...BUILTIN_IMAGES.map((i) => ({ id: i.id, name: i.name, url: builtinImageUrl(i.id) })),
@@ -233,7 +240,10 @@ export function createMenu(
     b.dataset.image = id;
     const thumb = document.createElement('span');
     thumb.className = url ? 'picture-thumb' : 'picture-thumb picture-thumb--numbers';
-    if (url) {
+    if (id === 'random') {
+      thumb.classList.add('picture-thumb--random');
+      thumb.textContent = '?';
+    } else if (url) {
       thumb.style.backgroundImage = `url("${url}")`;
       if (id !== 'user' && !id.startsWith('file:')) thumb.classList.add('pixelated');
     } else {

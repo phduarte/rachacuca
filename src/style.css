@@ -910,3 +910,79 @@ button:focus-visible {
 .size-dim {
   font-size: 16px;
 }
+
+/* Troca de paleta (seção 3.1): cores com transição de 300 ms... */
+@property --bg { syntax: '<color>'; inherits: true; initial-value: #1b1b24; }
+@property --ui-text { syntax: '<color>'; inherits: true; initial-value: #f4f1ea; }
+@property --frame { syntax: '<color>'; inherits: true; initial-value: #b51d14; }
+@property --bezel { syntax: '<color>'; inherits: true; initial-value: #d9271c; }
+@property --tile-face { syntax: '<color>'; inherits: true; initial-value: #f7f5f0; }
+@property --tile-edge-light { syntax: '<color>'; inherits: true; initial-value: #ffffff; }
+@property --tile-edge-dark { syntax: '<color>'; inherits: true; initial-value: #cdc8bd; }
+@property --text { syntax: '<color>'; inherits: true; initial-value: #141414; }
+@property --accent { syntax: '<color>'; inherits: true; initial-value: #d9271c; }
+@property --glow { syntax: '<color>'; inherits: true; initial-value: #29adff; }
+
+:root {
+  transition:
+    --bg 300ms, --ui-text 300ms, --frame 300ms, --bezel 300ms, --tile-face 300ms,
+    --tile-edge-light 300ms, --tile-edge-dark 300ms, --text 300ms, --accent 300ms, --glow 300ms;
+}
+
+/* ...e um glitch de 80 ms, como trocar de canal na TV */
+#app.glitch {
+  animation: glitch 80ms steps(1);
+}
+
+#app.glitch::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: var(--glitch-bands);
+  pointer-events: none;
+}
+
+@keyframes glitch {
+  0% { transform: translateX(4px); clip-path: inset(10% 0 60% 0); }
+  50% { transform: translateX(-3px); clip-path: inset(45% 0 20% 0); }
+}
+
+/* Nome da paleta por 1,5 s no topo */
+.palette-toast {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 72px);
+  left: 50%;
+  z-index: 6;
+  translate: -50% -8px;
+  padding: 8px 12px;
+  font-size: 8px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  color: var(--bg);
+  background: var(--ui-text);
+  box-shadow: 0 3px 0 rgb(0 0 0 / 0.4);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms, translate 200ms;
+}
+
+.palette-toast.show {
+  opacity: 1;
+  translate: -50% 0;
+}
+
+.swatch-chip--random,
+.picture-thumb--random {
+  display: grid;
+  place-items: center;
+  font: 16px var(--font);
+  color: var(--text);
+  background: var(--tile-face);
+  border-color: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { transition: none; }
+  .palette-toast { transition: none; }
+}

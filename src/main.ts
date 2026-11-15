@@ -10,11 +10,14 @@ import { holdMusic, setMusic } from './audio/music';
 import { setupServiceWorker } from './pwa/sw';
 import { installMode, markIOSHintShown, promptInstall, setupInstall, shouldShowIOSHint } from './pwa/install';
 import { createRotateHint, keepAwake, LANDSCAPE_PHONE, setupBackButton, setupFullscreen } from './pwa/fullscreen';
-import { applyPalette, paletteById } from './theme/palettes';
-import { builtinImageUrl, fileImageUrl, photoFromFile } from './theme/images';
+import { applyPalette, paletteById, PALETTES } from './theme/palettes';
+import { BUILTIN_IMAGES, builtinImageUrl, FILE_IMAGES, fileImageUrl, photoFromFile } from './theme/images';
+import { ORIGINAL_IMAGES } from './theme/originals';
+import { pickFresh, RECENT_IMAGES, RECENT_PALETTES, remember } from './theme/draw';
+import { glitch } from './render/crt';
 import { originalImageUrl } from './theme/originals';
 import { forgetRetro, RETRO_GRID, retroize } from './theme/retroize';
-import { loadPhoto, loadSettings, savePhoto, saveSettings, showNumbers } from './settings';
+import { loadPhoto, loadRecent, loadSettings, savePhoto, saveRecent, saveSettings, showNumbers } from './settings';
 import { createBrand } from './ui/brand';
 import { createMenu, createMenuButton } from './ui/menu';
 import { createPauseButton, createPauseScreen } from './ui/pause';
@@ -82,9 +85,10 @@ const menu = createMenu(menuState, {
   palette(id) {
     settings.palette = id;
     saveSettings(settings);
-    applyPalette(paletteById(id));
-    // No modo retrô a imagem é requantizada para a paleta nova.
-    if (settings.retro) applyImage();
+    // Paleta fixa vale já; "sortear" vale a partir da próxima partida.
+    if (id === 'random') return;
+    gamePalette = id;
+    applyTheme();
   },
   retro(on) {
     settings.retro = on;
@@ -99,6 +103,8 @@ const menu = createMenu(menuState, {
   image(id) {
     settings.image = id;
     saveSettings(settings);
+    if (id === 'random') return;
+    gameImage = id;
     applyImage();
   },
   async photo(file) {
@@ -106,6 +112,7 @@ const menu = createMenu(menuState, {
     forgetRetro('user');
     if (!savePhoto(photo)) alert('A FOTO VALE SÓ ATÉ FECHAR O JOGO: FALTOU ESPAÇO.');
     settings.image = 'user';
+    gameImage = 'user';
     saveSettings(settings);
     applyImage();
   },
@@ -165,8 +172,55 @@ setupFullscreen();
 /** Conta os pedidos de imagem para ignorar recortes que chegam atrasados. */
 let imageRequest = 0;
 
-applyPalette(paletteById(settings.palette));
-applyImage();
+/** Paleta e imagem da partida atual (sorteadas ou fixadas no menu). */
+let gamePalette = settings.palette === 'random' ? PALETTES[0]!.id : settings.palette;
+let gameImage = settings.image === 'random' ? 'none' : settings.image;
+
+/** Todas as imagens que entram no sorteio (seção 3.2). */
+function imageIds(): string[] {
+  return [
+    ...ORIGINAL_IMAGES.map((i) => i.id),
+    ...BUILTIN_IMAGES.map((i) => i.id),
+    ...FILE_IMAGES.map((i) => i.id),
+    ...(photo ? ['user'] : []),
+  ];
+}
+
+/** Seção 3: sorteia paleta e imagem sem repetir as recentes (ou usa as fixadas). */
+function chooseTheme(): void {
+  const recent = loadRecent();
+  gamePalette =
+    settings.palette === 'random'
+      ? pickFresh(PALETTES.map((p) => p.id), recent.palettes, RECENT_PALETTES)
+      : settings.palette;
+  gameImage = settings.image === 'random' ? pickFresh(imageIds(), recent.images, RECENT_IMAGES) : settings.image;
+  saveRecent({
+    palettes: remember(recent.palettes, gamePalette, RECENT_PALETTES),
+    images: gameImage === 'none' ? recent.images : remember(recent.images, gameImage, RECENT_IMAGES),
+  });
+}
+
+const paletteToast = document.createElement('div');
+paletteToast.className = 'palette-toast';
+paletteToast.setAttribute('aria-live', 'polite');
+app.append(paletteToast);
+let toastTimer = 0;
+let shownPalette = '';
+
+/** Aplica a paleta (com glitch e o nome por 1,5 s, se mudou) e a imagem. */
+function applyTheme(): void {
+  const p = paletteById(gamePalette);
+  if (p.id !== shownPalette) {
+    if (shownPalette) glitch();
+    shownPalette = p.id;
+    applyPalette(p);
+    paletteToast.textContent = `PALETA: ${p.name}`;
+    paletteToast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => paletteToast.classList.remove('show'), 1500);
+  }
+  applyImage();
+}
 
 /** Seção 3.2: com imagem, o número só aparece se a opção (ou o tamanho) pedir. */
 function applyNumbers(): void {
@@ -182,12 +236,12 @@ interface SourceImage {
 
 /** A imagem escolhida em cores originais (null = só números). */
 async function sourceImage(): Promise<SourceImage | null> {
-  if (settings.image === 'user') return photo ? { url: photo, pixelated: false, grid: RETRO_GRID } : null;
-  const original = originalImageUrl(settings.image);
+  if (gameImage === 'user') return photo ? { url: photo, pixelated: false, grid: RETRO_GRID } : null;
+  const original = originalImageUrl(gameImage);
   if (original) return { url: original, pixelated: true, grid: RETRO_GRID };
-  const builtin = builtinImageUrl(settings.image);
+  const builtin = builtinImageUrl(gameImage);
   if (builtin) return { url: builtin, pixelated: true, grid: 64 };
-  const file = fileImageUrl(settings.image);
+  const file = fileImageUrl(gameImage);
   if (!file) return null;
   const { url, pixelated } = await file;
   return { url, pixelated, grid: RETRO_GRID };
@@ -207,7 +261,7 @@ function applyImage(): void {
     (src) => {
       if (!src) return show(null);
       if (!settings.retro) return show(src.url, src.pixelated);
-      retroize(settings.image, src.url, paletteById(settings.palette), src.grid).then(
+      retroize(gameImage, src.url, paletteById(gamePalette), src.grid).then(
         (url) => show(url, true),
         () => show(src.url, src.pixelated),
       );
@@ -258,9 +312,18 @@ winMsg.className = 'win-msg';
 winMsg.setAttribute('role', 'status');
 winMsg.textContent = 'Rachou a Cuca!';
 
-function newGame(gameSeed = newSeed()): void {
+/**
+ * Partida nova (seção 3): sorteia paleta, imagem e embaralhamento.
+ * REINICIAR passa a mesma semente e mantém paleta e imagem.
+ */
+function newGame(gameSeed?: number): void {
   const id = ++gameId;
   size = settings.size;
+  if (gameSeed === undefined) {
+    gameSeed = newSeed();
+    chooseTheme();
+  }
+  applyTheme();
   seed = gameSeed;
   const shuffled = shuffle(size, seed);
   paused = false;

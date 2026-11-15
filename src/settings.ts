@@ -4,8 +4,9 @@
  * segue com os padrões.
  */
 export interface Settings {
+  /** 'random' (sorteada a cada partida, seção 3.1) ou o id de uma paleta fixa. */
   palette: string;
-  /** 'none' (só números), id de imagem embarcada ou 'user' (foto do jogador). */
+  /** 'random' (sorteada a cada partida), 'none' (só números), id de imagem ou 'user' (foto). */
   image: string;
   /** Volume dos efeitos, de 0 (desligado) a 3 (alto). */
   volume: number;
@@ -25,7 +26,7 @@ export interface Settings {
 
 const KEY = 'rachacuca:settings';
 const PHOTO_KEY = 'rachacuca:photo';
-const DEFAULTS: Settings = { palette: 'brinquedo', image: 'none', volume: 2, vibration: true, music: false, size: 4, unlocked6: false, numbers: 'auto', retro: true };
+const DEFAULTS: Settings = { palette: 'random', image: 'random', volume: 2, vibration: true, music: false, size: 4, unlocked6: false, numbers: 'auto', retro: true };
 
 export function loadSettings(): Settings {
   try {
@@ -49,6 +50,35 @@ export function showNumbers(s: Pick<Settings, 'numbers'>, size: number): boolean
 export function saveSettings(s: Settings): void {
   try {
     localStorage.setItem(KEY, JSON.stringify(s));
+  } catch {
+    /* sem armazenamento */
+  }
+}
+
+/** Paletas e imagens das últimas partidas, para o sorteio não repetir (seção 3). */
+export interface Recent {
+  palettes: string[];
+  images: string[];
+}
+
+const RECENT_KEY = 'rachacuca:recent';
+
+export function loadRecent(): Recent {
+  try {
+    const raw = localStorage.getItem(RECENT_KEY);
+    if (raw) {
+      const r = JSON.parse(raw) as Partial<Recent>;
+      return { palettes: r.palettes ?? [], images: r.images ?? [] };
+    }
+  } catch {
+    /* sem armazenamento */
+  }
+  return { palettes: [], images: [] };
+}
+
+export function saveRecent(r: Recent): void {
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(r));
   } catch {
     /* sem armazenamento */
   }
