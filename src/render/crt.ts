@@ -1,8 +1,25 @@
 /**
- * Efeitos de tubo de TV (seção 10.1 e 3.1): glitch de troca de canal.
- * Respeita prefers-reduced-motion (sem glitch).
+ * Efeitos de tubo de TV (seções 10.1, 10.2 e 3.1): camada CRT (linhas de
+ * varredura, vinheta e aberração cromática nos textos), glitch de troca de
+ * canal e a transição de "desligar o tubo" entre telas.
+ * Tudo em camadas fixas, transform e opacity, para não derrubar os 60 fps do
+ * deslize. Respeita prefers-reduced-motion.
  */
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+
+let layer: HTMLDivElement | null = null;
+
+/** Liga ou desliga a camada CRT (opção EFEITO CRT, padrão ligado). */
+export function setCrt(on: boolean): void {
+  if (!layer) {
+    layer = document.createElement('div');
+    layer.className = 'crt';
+    layer.setAttribute('aria-hidden', 'true');
+    document.body.append(layer);
+  }
+  layer.hidden = !on;
+  document.documentElement.classList.toggle('crt-on', on);
+}
 
 /** "Glitch" de 80 ms: faixas da tela pulam para o lado, como trocar de canal. */
 export function glitch(): void {

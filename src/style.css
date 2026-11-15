@@ -986,3 +986,39 @@ button:focus-visible {
   :root { transition: none; }
   .palette-toast { transition: none; }
 }
+
+/* Efeito CRT (seção 10.1): camada fixa por cima de tudo, sem eventos de toque.
+   Linhas de varredura de 2 px a 6% e vinheta nas bordas. */
+.crt {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg, rgb(0 0 0 / 0.06) 0 1px, transparent 1px 2px),
+    radial-gradient(ellipse at center, transparent 58%, rgb(0 0 0 / 0.38) 100%);
+}
+
+.crt[hidden] {
+  display: none;
+}
+
+/* Aberração cromática leve nos textos da interface */
+.crt-on :is(.stat-value, .stat-label, .menu-head h2, .pause h2, .palette-toast, .rotate-hint p) {
+  text-shadow:
+    -1px 0 rgb(255 0 60 / 0.45),
+    1px 0 rgb(0 220 255 / 0.45);
+}
+
+/* Movimento reduzido: CRT suavizado (vinheta mais leve, sem aberração) */
+@media (prefers-reduced-motion: reduce) {
+  .crt {
+    background:
+      repeating-linear-gradient(0deg, rgb(0 0 0 / 0.04) 0 1px, transparent 1px 2px),
+      radial-gradient(ellipse at center, transparent 65%, rgb(0 0 0 / 0.25) 100%);
+  }
+
+  .crt-on :is(.stat-value, .stat-label, .menu-head h2, .pause h2, .palette-toast, .rotate-hint p) {
+    text-shadow: none;
+  }
+}

@@ -14,7 +14,7 @@ import { applyPalette, paletteById, PALETTES } from './theme/palettes';
 import { BUILTIN_IMAGES, builtinImageUrl, FILE_IMAGES, fileImageUrl, photoFromFile } from './theme/images';
 import { ORIGINAL_IMAGES } from './theme/originals';
 import { pickFresh, RECENT_IMAGES, RECENT_PALETTES, remember } from './theme/draw';
-import { glitch } from './render/crt';
+import { glitch, setCrt } from './render/crt';
 import { originalImageUrl } from './theme/originals';
 import { forgetRetro, RETRO_GRID, retroize } from './theme/retroize';
 import { loadPhoto, loadRecent, loadSettings, savePhoto, saveRecent, saveSettings, showNumbers } from './settings';
@@ -90,6 +90,11 @@ const menu = createMenu(menuState, {
     gamePalette = id;
     applyTheme();
   },
+  crt(on) {
+    settings.crt = on;
+    saveSettings(settings);
+    setCrt(on);
+  },
   retro(on) {
     settings.retro = on;
     saveSettings(settings);
@@ -144,6 +149,7 @@ const menu = createMenu(menuState, {
 });
 
 sfx.setVolume(settings.volume);
+setCrt(settings.crt);
 setMusic(settings.music);
 // Seção 6.2: o AudioContext só toca depois de um gesto do jogador (iOS e
 // Chrome). Retomar é barato, então todo toque tenta (o iOS suspende o áudio

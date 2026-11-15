@@ -14,6 +14,7 @@ export interface MenuState {
   image: string;
   numbers: 'auto' | 'on' | 'off';
   retro: boolean;
+  crt: boolean;
   photo: string | null;
   volume: number;
   music: boolean;
@@ -33,6 +34,7 @@ export interface MenuHandlers {
   image(id: string): void;
   numbers(mode: 'auto' | 'on' | 'off'): void;
   retro(on: boolean): void;
+  crt(on: boolean): void;
   /** Recebe o arquivo escolhido; resolve quando a foto já está em uso. */
   photo(file: File): Promise<void>;
   /** Nível de 0 (mudo) a 3 (alto). */
@@ -114,6 +116,10 @@ export function createMenu(
   const retroGrid = grid('toggle');
   retro.append(retroGrid);
 
+  const crt = section('EFEITO CRT');
+  const crtGrid = grid('toggle');
+  crt.append(crtGrid);
+
   const numbers = section('MOSTRAR NÚMEROS');
   const numbersGrid = grid('levels');
   numbers.append(numbersGrid);
@@ -141,7 +147,7 @@ export function createMenu(
 
   const body = document.createElement('div');
   body.className = 'menu-body';
-  body.append(updateBtn, newGameBtn, sizes, colors, images, retro, numbers, sound, music, vibration, installBtn, credits);
+  body.append(updateBtn, newGameBtn, sizes, colors, images, retro, crt, numbers, sound, music, vibration, installBtn, credits);
   dlg.append(header, body);
 
   function render(): void {
@@ -182,6 +188,13 @@ export function createMenu(
       ...[true, false].map((on) => {
         const b = option(on ? 'LIGADO' : 'DESLIGADO', on === s.retro);
         b.dataset.retro = String(on);
+        return b;
+      }),
+    );
+    crtGrid.replaceChildren(
+      ...[true, false].map((on) => {
+        const b = option(on ? 'LIGADO' : 'DESLIGADO', on === s.crt);
+        b.dataset.crt = String(on);
         return b;
       }),
     );
@@ -277,6 +290,12 @@ export function createMenu(
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-retro]');
     if (!b) return;
     h.retro(b.dataset.retro === 'true');
+    render();
+  });
+  crtGrid.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-crt]');
+    if (!b) return;
+    h.crt(b.dataset.crt === 'true');
     render();
   });
   numbersGrid.addEventListener('click', (e) => {

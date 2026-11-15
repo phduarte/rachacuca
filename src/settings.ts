@@ -22,11 +22,13 @@ export interface Settings {
   numbers: 'auto' | 'on' | 'off';
   /** Modo retrô (seção 3.2): imagem em grade de pixels nas cores da paleta. */
   retro: boolean;
+  /** Efeito CRT: linhas de varredura, vinheta e aberração (seção 10.1). */
+  crt: boolean;
 }
 
 const KEY = 'rachacuca:settings';
 const PHOTO_KEY = 'rachacuca:photo';
-const DEFAULTS: Settings = { palette: 'random', image: 'random', volume: 2, vibration: true, music: false, size: 4, unlocked6: false, numbers: 'auto', retro: true };
+const DEFAULTS: Settings = { palette: 'random', image: 'random', volume: 2, vibration: true, music: false, size: 4, unlocked6: false, numbers: 'auto', retro: true, crt: true };
 
 export function loadSettings(): Settings {
   try {
