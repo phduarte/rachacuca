@@ -12,7 +12,7 @@ import { installMode, markIOSHintShown, promptInstall, setupInstall, shouldShowI
 import { createRotateHint, keepAwake, LANDSCAPE_PHONE, setupBackButton, setupFullscreen } from './pwa/fullscreen';
 import { applyPalette, paletteById } from './theme/palettes';
 import { builtinImageUrl, fileImageUrl, photoFromFile } from './theme/images';
-import { loadPhoto, loadSettings, savePhoto, saveSettings } from './settings';
+import { loadPhoto, loadSettings, savePhoto, saveSettings, showNumbers } from './settings';
 import { createBrand } from './ui/brand';
 import { createMenu, createMenuButton } from './ui/menu';
 import { createPauseButton, createPauseScreen } from './ui/pause';
@@ -81,6 +81,11 @@ const menu = createMenu(menuState, {
     settings.palette = id;
     saveSettings(settings);
     applyPalette(paletteById(id));
+  },
+  numbers(mode) {
+    settings.numbers = mode;
+    saveSettings(settings);
+    applyNumbers();
   },
   image(id) {
     settings.image = id;
@@ -152,6 +157,11 @@ let imageRequest = 0;
 
 applyPalette(paletteById(settings.palette));
 applyImage();
+
+/** Seção 3.2: com imagem, o número só aparece se a opção (ou o tamanho) pedir. */
+function applyNumbers(): void {
+  view.el.classList.toggle('hide-numbers', !showNumbers(settings, size));
+}
 
 function applyImage(): void {
   const req = ++imageRequest;
@@ -227,6 +237,7 @@ function newGame(gameSeed = newSeed()): void {
   winMsg.remove();
   timer.reset();
   view.mount(board);
+  applyNumbers();
   view.el.classList.remove('shuffling');
   view.el.append(countdown);
   renderHud();

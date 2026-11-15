@@ -17,11 +17,13 @@ export interface Settings {
   size: 3 | 4 | 5 | 6;
   /** O 6 × 6 "Insano" é liberado ao vencer um 5 × 5 (seção 2.1). */
   unlocked6: boolean;
+  /** Número nas peças com imagem (seção 3.2): 'auto' liga só no 5 × 5 e 6 × 6. */
+  numbers: 'auto' | 'on' | 'off';
 }
 
 const KEY = 'rachacuca:settings';
 const PHOTO_KEY = 'rachacuca:photo';
-const DEFAULTS: Settings = { palette: 'brinquedo', image: 'none', volume: 2, vibration: true, music: false, size: 4, unlocked6: false };
+const DEFAULTS: Settings = { palette: 'brinquedo', image: 'none', volume: 2, vibration: true, music: false, size: 4, unlocked6: false, numbers: 'auto' };
 
 export function loadSettings(): Settings {
   try {
@@ -35,6 +37,11 @@ export function loadSettings(): Settings {
     /* sem armazenamento */
   }
   return { ...DEFAULTS };
+}
+
+/** O número aparece na peça com imagem? (Sem imagem, sempre aparece.) */
+export function showNumbers(s: Pick<Settings, 'numbers'>, size: number): boolean {
+  return s.numbers === 'auto' ? size >= 5 : s.numbers === 'on';
 }
 
 export function saveSettings(s: Settings): void {

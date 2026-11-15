@@ -353,8 +353,11 @@ button:focus-visible {
 .board.has-image .tile-num {
   position: absolute;
   top: 4px;
-  left: 5px;
-  font-size: max(10px, calc(min(100vw - 32px, 70dvh) / var(--size) * 0.16));
+  left: 4px;
+  /* Fonte bitmap no canto: 8 px, ou 16 px nas peças grandes */
+  font-family: var(--font);
+  font-weight: 400;
+  font-size: 8px;
   line-height: 1;
   color: #fff;
   text-shadow:
@@ -362,6 +365,16 @@ button:focus-visible {
     -1px -1px 0 #000,
     1px -1px 0 #000,
     -1px 1px 0 #000;
+}
+
+@media (min-width: 560px) and (min-height: 700px) {
+  .board.has-image:is([data-size='3'], [data-size='4']) .tile-num {
+    font-size: 16px;
+  }
+}
+
+.board.has-image.hide-numbers .tile-num {
+  display: none;
 }
 
 /* Tela de opções */

@@ -11,6 +11,7 @@ export interface MenuState {
   unlocked6: boolean;
   palette: string;
   image: string;
+  numbers: 'auto' | 'on' | 'off';
   photo: string | null;
   volume: number;
   music: boolean;
@@ -28,6 +29,7 @@ export interface MenuHandlers {
   size(n: 3 | 4 | 5 | 6): void;
   palette(id: string): void;
   image(id: string): void;
+  numbers(mode: 'auto' | 'on' | 'off'): void;
   /** Recebe o arquivo escolhido; resolve quando a foto já está em uso. */
   photo(file: File): Promise<void>;
   /** Nível de 0 (mudo) a 3 (alto). */
@@ -105,6 +107,10 @@ export function createMenu(
   uploadBtn.textContent = 'ENVIAR FOTO';
   images.append(imageGrid, uploadBtn, fileInput);
 
+  const numbers = section('MOSTRAR NÚMEROS');
+  const numbersGrid = grid('levels');
+  numbers.append(numbersGrid);
+
   const sound = section('SOM');
   const volumeGrid = grid('levels');
   sound.append(volumeGrid);
@@ -128,7 +134,7 @@ export function createMenu(
 
   const body = document.createElement('div');
   body.className = 'menu-body';
-  body.append(updateBtn, newGameBtn, sizes, colors, images, sound, music, vibration, installBtn, credits);
+  body.append(updateBtn, newGameBtn, sizes, colors, images, numbers, sound, music, vibration, installBtn, credits);
   dlg.append(header, body);
 
   function render(): void {
@@ -157,6 +163,19 @@ export function createMenu(
     if (s.photo) opts.push({ id: 'user', name: 'SUA FOTO', url: s.photo });
     imageGrid.replaceChildren(...opts.map((o) => picture(o.id, o.name, o.url, o.id === s.image)));
     uploadBtn.textContent = s.photo ? 'TROCAR FOTO' : 'ENVIAR FOTO';
+    numbersGrid.replaceChildren(
+      ...(
+        [
+          ['auto', 'AUTO'],
+          ['on', 'SIM'],
+          ['off', 'NÃO'],
+        ] as const
+      ).map(([mode, name]) => {
+        const b = option(name, mode === s.numbers);
+        b.dataset.numbers = mode;
+        return b;
+      }),
+    );
     volumeGrid.replaceChildren(
       ...VOLUME_NAMES.map((name, level) => {
         const b = option(name, level === s.volume);
@@ -227,6 +246,12 @@ export function createMenu(
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-image]');
     if (!b) return;
     h.image(b.dataset.image!);
+    render();
+  });
+  numbersGrid.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-numbers]');
+    if (!b) return;
+    h.numbers(b.dataset.numbers as 'auto' | 'on' | 'off');
     render();
   });
   volumeGrid.addEventListener('click', (e) => {

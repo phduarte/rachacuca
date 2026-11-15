@@ -23,6 +23,7 @@ export class BoardView {
   mount(board: Board): void {
     this.size = board.size;
     this.el.style.setProperty('--size', String(board.size));
+    this.el.dataset.size = String(board.size);
     this.el.replaceChildren();
     this.tileEls.clear();
     board.tiles.forEach((tile) => {
