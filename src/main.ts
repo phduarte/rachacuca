@@ -12,6 +12,7 @@ import { installMode, markIOSHintShown, promptInstall, setupInstall, shouldShowI
 import { createRotateHint, keepAwake, LANDSCAPE_PHONE, setupBackButton, setupFullscreen } from './pwa/fullscreen';
 import { applyPalette, paletteById } from './theme/palettes';
 import { builtinImageUrl, fileImageUrl, photoFromFile } from './theme/images';
+import { forgetRetro, RETRO_GRID, retroize } from './theme/retroize';
 import { loadPhoto, loadSettings, savePhoto, saveSettings, showNumbers } from './settings';
 import { createBrand } from './ui/brand';
 import { createMenu, createMenuButton } from './ui/menu';
@@ -81,6 +82,13 @@ const menu = createMenu(menuState, {
     settings.palette = id;
     saveSettings(settings);
     applyPalette(paletteById(id));
+    // No modo retrô a imagem é requantizada para a paleta nova.
+    if (settings.retro) applyImage();
+  },
+  retro(on) {
+    settings.retro = on;
+    saveSettings(settings);
+    applyImage();
   },
   numbers(mode) {
     settings.numbers = mode;
@@ -94,6 +102,7 @@ const menu = createMenu(menuState, {
   },
   async photo(file) {
     photo = await photoFromFile(file);
+    forgetRetro('user');
     if (!savePhoto(photo)) alert('A FOTO VALE SÓ ATÉ FECHAR O JOGO: FALTOU ESPAÇO.');
     settings.image = 'user';
     saveSettings(settings);
@@ -163,15 +172,44 @@ function applyNumbers(): void {
   view.el.classList.toggle('hide-numbers', !showNumbers(settings, size));
 }
 
+interface SourceImage {
+  url: string;
+  pixelated: boolean;
+  /** Lado da grade do modo retrô: imagens menores não são ampliadas. */
+  grid: number;
+}
+
+/** A imagem escolhida em cores originais (null = só números). */
+async function sourceImage(): Promise<SourceImage | null> {
+  if (settings.image === 'user') return photo ? { url: photo, pixelated: false, grid: RETRO_GRID } : null;
+  const builtin = builtinImageUrl(settings.image);
+  if (builtin) return { url: builtin, pixelated: true, grid: 64 };
+  const file = fileImageUrl(settings.image);
+  if (!file) return null;
+  const { url, pixelated } = await file;
+  return { url, pixelated, grid: RETRO_GRID };
+}
+
+/**
+ * Aplica a imagem da partida: em cores originais ou, no modo retrô, em grade
+ * de pixels nas cores da paleta (seção 3.2). O recorte e o retrô são
+ * assíncronos; respostas de pedidos antigos são ignoradas.
+ */
 function applyImage(): void {
   const req = ++imageRequest;
-  if (settings.image === 'user' && photo) return view.setImage(photo);
-  const file = fileImageUrl(settings.image);
-  if (!file) return view.setImage(builtinImageUrl(settings.image), true);
-  // A imagem da pasta é recortada de forma assíncrona; ignora respostas velhas.
-  file.then(
-    ({ url, pixelated }) => req === imageRequest && view.setImage(url, pixelated),
-    () => req === imageRequest && view.setImage(null),
+  const show = (url: string | null, pixelated = false) => {
+    if (req === imageRequest) view.setImage(url, pixelated);
+  };
+  sourceImage().then(
+    (src) => {
+      if (!src) return show(null);
+      if (!settings.retro) return show(src.url, src.pixelated);
+      retroize(settings.image, src.url, paletteById(settings.palette), src.grid).then(
+        (url) => show(url, true),
+        () => show(src.url, src.pixelated),
+      );
+    },
+    () => show(null),
   );
 }
 

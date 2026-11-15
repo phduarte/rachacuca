@@ -12,6 +12,7 @@ export interface MenuState {
   palette: string;
   image: string;
   numbers: 'auto' | 'on' | 'off';
+  retro: boolean;
   photo: string | null;
   volume: number;
   music: boolean;
@@ -30,6 +31,7 @@ export interface MenuHandlers {
   palette(id: string): void;
   image(id: string): void;
   numbers(mode: 'auto' | 'on' | 'off'): void;
+  retro(on: boolean): void;
   /** Recebe o arquivo escolhido; resolve quando a foto já está em uso. */
   photo(file: File): Promise<void>;
   /** Nível de 0 (mudo) a 3 (alto). */
@@ -107,6 +109,10 @@ export function createMenu(
   uploadBtn.textContent = 'ENVIAR FOTO';
   images.append(imageGrid, uploadBtn, fileInput);
 
+  const retro = section('MODO RETRÔ');
+  const retroGrid = grid('toggle');
+  retro.append(retroGrid);
+
   const numbers = section('MOSTRAR NÚMEROS');
   const numbersGrid = grid('levels');
   numbers.append(numbersGrid);
@@ -134,7 +140,7 @@ export function createMenu(
 
   const body = document.createElement('div');
   body.className = 'menu-body';
-  body.append(updateBtn, newGameBtn, sizes, colors, images, numbers, sound, music, vibration, installBtn, credits);
+  body.append(updateBtn, newGameBtn, sizes, colors, images, retro, numbers, sound, music, vibration, installBtn, credits);
   dlg.append(header, body);
 
   function render(): void {
@@ -163,6 +169,13 @@ export function createMenu(
     if (s.photo) opts.push({ id: 'user', name: 'SUA FOTO', url: s.photo });
     imageGrid.replaceChildren(...opts.map((o) => picture(o.id, o.name, o.url, o.id === s.image)));
     uploadBtn.textContent = s.photo ? 'TROCAR FOTO' : 'ENVIAR FOTO';
+    retroGrid.replaceChildren(
+      ...[true, false].map((on) => {
+        const b = option(on ? 'LIGADO' : 'DESLIGADO', on === s.retro);
+        b.dataset.retro = String(on);
+        return b;
+      }),
+    );
     numbersGrid.replaceChildren(
       ...(
         [
@@ -246,6 +259,12 @@ export function createMenu(
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-image]');
     if (!b) return;
     h.image(b.dataset.image!);
+    render();
+  });
+  retroGrid.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-retro]');
+    if (!b) return;
+    h.retro(b.dataset.retro === 'true');
     render();
   });
   numbersGrid.addEventListener('click', (e) => {

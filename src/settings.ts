@@ -19,11 +19,13 @@ export interface Settings {
   unlocked6: boolean;
   /** Número nas peças com imagem (seção 3.2): 'auto' liga só no 5 × 5 e 6 × 6. */
   numbers: 'auto' | 'on' | 'off';
+  /** Modo retrô (seção 3.2): imagem em grade de pixels nas cores da paleta. */
+  retro: boolean;
 }
 
 const KEY = 'rachacuca:settings';
 const PHOTO_KEY = 'rachacuca:photo';
-const DEFAULTS: Settings = { palette: 'brinquedo', image: 'none', volume: 2, vibration: true, music: false, size: 4, unlocked6: false, numbers: 'auto' };
+const DEFAULTS: Settings = { palette: 'brinquedo', image: 'none', volume: 2, vibration: true, music: false, size: 4, unlocked6: false, numbers: 'auto', retro: true };
 
 export function loadSettings(): Settings {
   try {
