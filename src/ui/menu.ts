@@ -4,6 +4,7 @@
  */
 import { PALETTES, type Palette } from '../theme/palettes';
 import { BUILTIN_IMAGES, FILE_IMAGES, builtinImageUrl } from '../theme/images';
+import { creditsList } from './credits';
 
 export interface MenuState {
   palette: string;
@@ -102,13 +103,16 @@ export function createMenu(
   vibration.append(vibrationGrid);
   vibration.hidden = !('vibrate' in navigator);
 
+  const credits = section('CRÉDITOS E LICENÇAS');
+  credits.append(creditsList());
+
   const installBtn = document.createElement('button');
   installBtn.className = 'menu-secondary install-btn';
   installBtn.textContent = 'INSTALAR';
 
   const body = document.createElement('div');
   body.className = 'menu-body';
-  body.append(updateBtn, newGameBtn, colors, images, sound, music, vibration, installBtn);
+  body.append(updateBtn, newGameBtn, colors, images, sound, music, vibration, installBtn, credits);
   dlg.append(header, body);
 
   function render(): void {
