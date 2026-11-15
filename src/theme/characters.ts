@@ -277,4 +277,66 @@ export const CHARACTERS: BuiltinImage[] = [
       );
     },
   },
+  {
+    id: 'parrot',
+    name: 'PAPAGAIO SURFISTA',
+    draw(px) {
+      compose(
+        px,
+        (f, p) => {
+          stripes(f, ['#f2c14e', '#f2c14e', '#f08a24', '#f08a24', '#d9541e', '#2f8f8a', '#2f6f8a', '#245a73']);
+          // Sol
+          f.ellipse(52, 11, 7, 7, '#fff3c4');
+          f.rect(0, 40, N, 24, '#2f8f8a');
+          // Cristas das ondas
+          for (let y = 42; y < N; y += 4)
+            for (let x = 0; x < N; x++) if ((x + y * 3) % 12 < 3) p(x, y, '#7cc4a4');
+        },
+        (f) => {
+          // Prancha
+          f.ellipse(31, 54, 25, 3.5, '#fff3c4');
+          // Rabo comprido, atrás do corpo
+          f.tri(19, 40, 22, 46, 5, 56, '#d9271c');
+          f.tri(19, 42, 24, 46, 9, 57, '#2f6fd0');
+          // Corpo e pés
+          f.ellipse(28, 38, 10, 12, '#4caf3a');
+          f.rect(23, 48, 4, 4, '#f08a24');
+          f.rect(31, 48, 4, 4, '#f08a24');
+          // Asas abertas para equilibrar
+          f.tri(20, 32, 3, 22, 18, 42, '#3e8f2e');
+          f.tri(36, 32, 54, 40, 36, 43, '#3e8f2e');
+          f.tri(3, 22, 8, 25, 6, 30, '#2f6fd0');
+          f.tri(54, 40, 49, 37, 50, 43, '#2f6fd0');
+          // Cabeça e topete vermelho
+          f.ellipse(33, 21, 10, 9, '#4caf3a');
+          f.tri(26, 14, 22, 4, 30, 12, '#d9271c');
+          f.tri(29, 13, 29, 2, 34, 12, '#d9271c');
+          f.tri(32, 13, 37, 4, 37, 14, '#d9271c');
+          // Bico curvo
+          f.ellipse(43, 25, 4, 3, '#5a5248');
+          f.ellipse(43, 21, 5, 4, '#e8e2d0');
+          f.tri(43, 20, 49, 20, 47, 28, '#e8e2d0');
+        },
+        (f) => {
+          // Barriga amarela e penas da asa
+          f.ellipse(30, 41, 6, 7, '#f2c14e');
+          for (const [x, y] of [[10, 27], [13, 31], [42, 38], [46, 40]]) f.line(x!, y!, x! + 3, y! + 2, '#2e6b22');
+          // Óculos escuros de surfista
+          f.rect(28, 17, 13, 1, INK);
+          f.ellipse(32, 19, 3, 2.5, INK);
+          f.ellipse(38, 19, 2.5, 2.5, INK);
+          f.rect(31, 18, 2, 1, '#f08a24');
+          f.rect(37, 18, 2, 1, '#f08a24');
+          // Bochecha
+          f.ellipse(30, 23, 1.5, 1.5, '#f08a7a');
+          // Separação do bico e sorriso
+          f.line(40, 25, 44, 26, INK);
+          // Faixa vermelha na prancha
+          f.rect(10, 54, 42, 1, '#d9271c');
+          // Respingos
+          for (const [x, y] of [[4, 50], [58, 51], [7, 46], [56, 47]]) f.rect(x!, y!, 2, 1, '#fff3c4');
+        },
+      );
+    },
+  },
 ];
