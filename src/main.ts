@@ -79,10 +79,11 @@ const menu = createMenu(() => ({ palette: settings.palette, image: settings.imag
 
 const victory = new VictoryEffect();
 app.append(topBar, display, view.el, menu.el, victory.canvas);
+/** Conta os pedidos de imagem para ignorar recortes que chegam atrasados. */
+let imageRequest = 0;
+
 applyPalette(paletteById(settings.palette));
 applyImage();
-
-let imageRequest = 0;
 
 function applyImage(): void {
   const req = ++imageRequest;
