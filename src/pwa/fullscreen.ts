@@ -77,3 +77,47 @@ export function createRotateHint(): HTMLDivElement {
     <p>GIRE O<br>APARELHO</p>`;
   return el;
 }
+
+/**
+ * Tela acesa durante a partida (seção 9.3). O sistema solta a trava sozinho
+ * quando o app sai de cena; ela é pedida de novo quando ele volta, se o jogo
+ * ainda quiser. Onde a API não existe, nada acontece.
+ */
+let wakeLock: WakeLockSentinel | null = null;
+let wantAwake = false;
+let requesting = false;
+
+async function requestWakeLock(): Promise<void> {
+  if (!('wakeLock' in navigator) || wakeLock || requesting || document.hidden) return;
+  requesting = true;
+  try {
+    const lock = await navigator.wakeLock.request('screen');
+    if (!wantAwake || wakeLock) {
+      void lock.release();
+      return;
+    }
+    wakeLock = lock;
+    lock.addEventListener('release', () => {
+      if (wakeLock === lock) wakeLock = null;
+    });
+  } catch {
+    /* recusado (bateria fraca, aba oculta etc.) */
+  } finally {
+    requesting = false;
+  }
+}
+
+export function keepAwake(on: boolean): void {
+  if (on === wantAwake) return;
+  wantAwake = on;
+  if (on) void requestWakeLock();
+  else if (wakeLock) {
+    const lock = wakeLock;
+    wakeLock = null;
+    void lock.release().catch(() => {});
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && wantAwake) void requestWakeLock();
+});

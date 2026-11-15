@@ -8,7 +8,7 @@ import { VICTORY_TIMES, VictoryEffect } from './render/victory';
 import * as sfx from './audio/sfx';
 import { holdMusic, setMusic } from './audio/music';
 import { setupServiceWorker } from './pwa/sw';
-import { createRotateHint, setupFullscreen } from './pwa/fullscreen';
+import { createRotateHint, keepAwake, setupFullscreen } from './pwa/fullscreen';
 import { applyPalette, paletteById } from './theme/palettes';
 import { builtinImageUrl, fileImageUrl, photoFromFile } from './theme/images';
 import { loadPhoto, loadSettings, savePhoto, saveSettings } from './settings';
@@ -190,6 +190,7 @@ function newGame(): void {
   view.el.classList.remove('shuffling');
   view.el.append(countdown);
   renderHud();
+  syncAwake();
 
   let n = COUNTDOWN_FROM;
   const tick = () => {
@@ -247,6 +248,7 @@ function apply(result: MoveResult): void {
     timer.pause();
     queue.length = 0;
     renderHud();
+    syncAwake();
   }
   sliding = true;
   const id = gameId;
@@ -328,6 +330,11 @@ function dragStart(x: number, y: number): DragControl | null {
       view.release();
     },
   };
+}
+
+/** Tela acesa só com a partida em jogo (seção 9.3). */
+function syncAwake(): void {
+  keepAwake(!won);
 }
 
 function renderHud(): void {
