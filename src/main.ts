@@ -1,5 +1,5 @@
 import './style.css';
-import { isSolved, moveAt, moveDirection, type Board, type MoveResult, type Size } from './core/board';
+import { createBoard, isSolved, moveAt, moveDirection, type Board, type MoveResult, type Size } from './core/board';
 import { newSeed, shuffle } from './core/shuffle';
 import { formatTime, Timer } from './core/timer';
 import { BoardView } from './render/boardView';
@@ -89,20 +89,61 @@ let size: Size = 4;
 let board: Board;
 let moves = 0;
 let won = false;
+/** Contagem antes de embaralhar: o tabuleiro aparece montado e não aceita jogadas. */
+let starting = false;
+let gameId = 0;
 const timer = new Timer();
 
+const COUNTDOWN_FROM = 3;
+const COUNTDOWN_STEP_MS = 800;
+const SHUFFLE_MS = 600;
+
+const countdown = document.createElement('div');
+countdown.className = 'countdown';
+countdown.setAttribute('aria-live', 'assertive');
+
 function newGame(): void {
-  board = shuffle(size, newSeed());
+  const id = ++gameId;
+  const shuffled = shuffle(size, newSeed());
+  board = createBoard(size);
   moves = 0;
   won = false;
+  starting = true;
   status.textContent = '';
   timer.reset();
   view.mount(board);
+  view.el.classList.remove('shuffling');
+  view.el.append(countdown);
   renderHud();
+
+  let n = COUNTDOWN_FROM;
+  const tick = () => {
+    if (id !== gameId) return;
+    if (n > 0) {
+      countdown.textContent = String(n);
+      // Reinicia a animação do número a cada passo.
+      countdown.classList.remove('pop');
+      void countdown.offsetWidth;
+      countdown.classList.add('pop');
+      n--;
+      setTimeout(tick, COUNTDOWN_STEP_MS);
+      return;
+    }
+    countdown.remove();
+    board = shuffled;
+    view.el.classList.add('shuffling');
+    view.update(board);
+    setTimeout(() => {
+      if (id !== gameId) return;
+      view.el.classList.remove('shuffling');
+      starting = false;
+    }, SHUFFLE_MS);
+  };
+  tick();
 }
 
 function apply(result: MoveResult | null): void {
-  if (!result || won) return;
+  if (!result || won || starting) return;
   if (!timer.running) timer.start();
   board = result.board;
   moves += result.moved.length;
