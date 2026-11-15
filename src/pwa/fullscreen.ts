@@ -121,3 +121,29 @@ export function keepAwake(on: boolean): void {
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && wantAwake) void requestWakeLock();
 });
+
+/**
+ * Botão voltar do Android (seção 9.3): uma entrada extra no histórico segura
+ * o "voltar", que vira `onBack` (pausar, fechar um diálogo) em vez de fechar
+ * o app. Nunca há mais de uma entrada extra: ela só é posta de novo depois
+ * de consumida, e só num gesto do jogador (o Chrome ignora entradas criadas
+ * sem gesto). Devolve `arm`, para chamar depois de abrir um diálogo ou
+ * voltar da pausa.
+ */
+export function setupBackButton(shouldGuard: () => boolean, onBack: () => void): () => void {
+  const isGuard = (state: unknown) => (state as { rachacucaGuard?: boolean } | null)?.rachacucaGuard === true;
+  let armed = isGuard(history.state);
+  const arm = () => {
+    if (armed || !shouldGuard()) return;
+    history.pushState({ rachacucaGuard: true }, '');
+    armed = true;
+  };
+  window.addEventListener('popstate', (e) => {
+    armed = isGuard(e.state);
+    if (!armed) onBack();
+  });
+  for (const type of ['pointerup', 'keydown'] as const) {
+    window.addEventListener(type, arm, { capture: true, passive: true });
+  }
+  return arm;
+}

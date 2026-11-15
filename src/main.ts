@@ -8,7 +8,7 @@ import { VICTORY_TIMES, VictoryEffect } from './render/victory';
 import * as sfx from './audio/sfx';
 import { holdMusic, setMusic } from './audio/music';
 import { setupServiceWorker } from './pwa/sw';
-import { createRotateHint, keepAwake, LANDSCAPE_PHONE, setupFullscreen } from './pwa/fullscreen';
+import { createRotateHint, keepAwake, LANDSCAPE_PHONE, setupBackButton, setupFullscreen } from './pwa/fullscreen';
 import { applyPalette, paletteById } from './theme/palettes';
 import { builtinImageUrl, fileImageUrl, photoFromFile } from './theme/images';
 import { loadPhoto, loadSettings, savePhoto, saveSettings } from './settings';
@@ -121,7 +121,10 @@ let stopVictorySound = (): void => {};
 const pauseScreen = createPauseScreen({
   resume: () => resume(),
   restart: () => newGame(seed),
-  menu: () => menu.open(),
+  menu() {
+    menu.open();
+    armBack();
+  },
 });
 app.append(topBar, display, view.el, pauseScreen.el, menu.el, victory.canvas, createRotateHint());
 setupFullscreen();
@@ -373,7 +376,24 @@ function resume(): void {
   // O relógio só volta se a partida já tinha começado (ele parte no 1º movimento).
   if (moves > 0) timer.start();
   syncAwake();
+  armBack();
 }
+
+/** Diálogo aberto por cima do jogo (opções, guia de instalação...). */
+function openDialog(): HTMLDialogElement | null {
+  return document.querySelector<HTMLDialogElement>('dialog[open]');
+}
+
+// Voltar (Android): fecha o diálogo aberto ou pausa a partida (seção 9.3).
+// Na pausa, sem nada para fechar, o voltar segue o padrão do sistema.
+const armBack = setupBackButton(
+  () => !!openDialog() || (!won && !starting && !paused),
+  () => {
+    const dlg = openDialog();
+    if (dlg) dlg.close();
+    else pause();
+  },
+);
 
 function renderHud(): void {
   timeEl.textContent = formatTime(timer.elapsedMs());
@@ -401,11 +421,14 @@ document.addEventListener('visibilitychange', () => {
   holdMusic('hidden', document.hidden);
 });
 
-menuBtn.addEventListener('click', () => menu.open());
+menuBtn.addEventListener('click', () => {
+  menu.open();
+  armBack();
+});
 pauseBtn.addEventListener('click', () => pause());
 // Esc pausa (seção 5). Com um diálogo aberto, o próprio Esc o fecha.
 window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !document.querySelector('dialog[open]')) pause();
+  if (e.key === 'Escape' && !openDialog()) pause();
 });
 // Celular deitado: o aviso "GIRE O APARELHO" cobre o jogo, então pausa.
 matchMedia(LANDSCAPE_PHONE).addEventListener('change', (e) => {
