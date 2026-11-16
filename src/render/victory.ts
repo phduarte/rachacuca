@@ -1,26 +1,32 @@
 /**
- * Efeito de vitória (seção 7): a tela escurece, uma corrente elétrica nasce
- * na casa vazia (canto inferior direito) e corre pelas frestas entre as peças
- * até cobrir a grade, sobrecarrega soltando faíscas e explode num curto-
- * -circuito, deixando a tela clara de novo. Desenhado num <canvas> do tamanho
- * da viewport, sobre o jogo. Um toque pula para o fim.
+ * Efeito de vitória (seção 7): luz neon percorrendo o tabuleiro.
+ *
+ * A última peça entra no encaixe com um tranco de 4 px e as frestas
+ * escurecem; dois cometas de neon contornam o tabuleiro a partir do canto
+ * onde ela entrou; uma varredura acende as linhas da grade na diagonal; o
+ * tabuleiro todo acende num brilho suave; o neon apaga e as frestas fecham,
+ * deixando a imagem inteira. Desenhado num <canvas> do tamanho da viewport,
+ * sobre o jogo. Um toque pula direto para o estado final.
+ *
+ * Sem pisca-pisca nem clarão (WCAG 2.3.1): o brilho sobe e desce uma vez.
+ * Com movimento reduzido, sem tranco nem cometas: a grade acende em
+ * sequência, suave, e apaga.
  */
 
 // Linha do tempo, em ms desde o início.
-const SHADE_END = 400; // escurece
-const PROP_END = 2000; // corrente percorre as frestas
-const OVERLOAD_END = 2500; // grade acesa, faíscas, tremor
-const BLAST_END = 2900; // clarão, anel de choque, raios, faíscas
-const SETTLE_END = 3600; // brasas caindo
-const REVEAL_AT = BLAST_END - 250; // mensagem aparece com o clarão sumindo
+const SNAP_END = 300; // encaixe da última peça
+const BORDER_END = 1100; // cometas contornam o tabuleiro
+const SWEEP_END = 1900; // varredura acende a grade na diagonal
+const GLOW_END = 2300; // tabuleiro todo aceso
+const SETTLE_AT = 2300; // neon apaga e as frestas fecham
+const REVEAL_AT = 2400; // painel de resultado sobe
+const END = 2800;
 const SKIP_AFTER = 300; // toques antes disso não pulam (é o próprio lance final)
 
 /** Linha do tempo para o som acompanhar a imagem (seção 7.2). */
-export const VICTORY_TIMES = { propStart: SHADE_END, propEnd: PROP_END, blastAt: OVERLOAD_END } as const;
+export const VICTORY_TIMES = { propStart: SNAP_END, propEnd: SWEEP_END, blastAt: SWEEP_END } as const;
 
-const SHADE_ALPHA = 0.72;
-const MAX_PARTICLES = 400;
-const GRAVITY = 900; // px/s²
+const SHADE_ALPHA = 0.6;
 
 interface Geometry {
   left: number;
@@ -30,18 +36,19 @@ interface Geometry {
   n: number;
 }
 
-interface Edge {
+interface Segment {
   ax: number;
   ay: number;
   bx: number;
   by: number;
-  /** Nível na busca em largura a partir do canto inferior direito. */
+  /** Ordem na varredura diagonal, a partir do canto inferior direito. */
   level: number;
-  pts: number[];
 }
 
 export interface VictoryCallbacks {
-  /** Hora de mostrar a mensagem de vitória. */
+  /** Assentamento: hora de fechar as frestas. */
+  settle(): void;
+  /** Hora de mostrar o resultado. */
   reveal(): void;
   /** Efeito terminou (ou foi pulado). */
   done(): void;
@@ -49,37 +56,28 @@ export interface VictoryCallbacks {
 
 export class VictoryEffect {
   readonly canvas: HTMLCanvasElement;
-  /** Vibrar na explosão (opção do jogador). */
+  /** Vibrar quando o tabuleiro acende (opção do jogador). */
   vibration = true;
   private ctx: CanvasRenderingContext2D;
   private raf = 0;
   private start = 0;
   private last = 0;
-  private frame = 0;
   private dpr = 1;
   private vw = 0;
   private vh = 0;
   private board: HTMLElement | null = null;
   private geo: Geometry = { left: 0, top: 0, side: 0, gap: 0, n: 0 };
-  private edges: Edge[] = [];
-  private bolts: number[][] = [];
-  private glow = '#29adff';
+  private grid: Segment[] = [];
+  private neonA = '#29adff';
+  private neonB = '#ff2a6d';
   private reduced = false;
-  /** Modo leve (seção 7.3): sem shadowBlur e com menos partículas. */
+  /** Modo leve (seção 7.3): sem shadowBlur. */
   private light = false;
   private slowFrames = 0;
-  private blasted = false;
+  private lit = false;
+  private settled = false;
   private revealed = false;
   private cb: VictoryCallbacks | null = null;
-
-  // Pool de partículas pré-alocado (seção 7.2).
-  private px = new Float32Array(MAX_PARTICLES);
-  private py = new Float32Array(MAX_PARTICLES);
-  private pvx = new Float32Array(MAX_PARTICLES);
-  private pvy = new Float32Array(MAX_PARTICLES);
-  private plife = new Float32Array(MAX_PARTICLES);
-  private pmax = new Float32Array(MAX_PARTICLES);
-  private pnext = 0;
 
   constructor() {
     this.canvas = document.createElement('canvas');
@@ -100,11 +98,12 @@ export class VictoryEffect {
     this.reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.light = false;
     this.slowFrames = 0;
-    this.blasted = false;
+    this.lit = false;
+    this.settled = false;
     this.revealed = false;
-    this.frame = 0;
-    this.plife.fill(0);
-    this.glow = getComputedStyle(document.documentElement).getPropertyValue('--glow').trim() || '#29adff';
+    const css = getComputedStyle(document.documentElement);
+    this.neonA = css.getPropertyValue('--glow').trim() || '#29adff';
+    this.neonB = css.getPropertyValue('--accent').trim() || '#ff2a6d';
     this.measure();
     this.canvas.classList.add('active');
     window.addEventListener('resize', this.onResize);
@@ -114,12 +113,13 @@ export class VictoryEffect {
     this.raf = requestAnimationFrame(this.tick);
   }
 
-  /** Pula direto para o resultado. */
+  /** Pula direto para o estado final: imagem inteira e resultado. */
   skip(): void {
     if (!this.playing) return;
     const cb = this.cb;
-    const revealed = this.revealed;
+    const { settled, revealed } = this;
     this.stop();
+    if (!settled) cb?.settle();
     if (!revealed) cb?.reveal();
     cb?.done();
   }
@@ -149,7 +149,7 @@ export class VictoryEffect {
     if (performance.now() - this.start >= SKIP_AFTER) this.skip();
   };
 
-  /** Tamanho do canvas e posição das frestas na tela. */
+  /** Tamanho do canvas e posição do tabuleiro e das linhas da grade na tela. */
   private measure(): void {
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.vw = window.innerWidth;
@@ -167,321 +167,212 @@ export class VictoryEffect {
     g.top = rect.top + b.clientTop;
     g.side = b.clientWidth;
     g.gap = parseFloat(getComputedStyle(b).getPropertyValue('--gap')) || 0;
-    this.buildEdges();
+    this.buildGrid();
   }
 
   /**
-   * Grafo das frestas: nós nos cruzamentos da grade ((N+1)² pontos), arestas
-   * entre vizinhos. O nível de cada nó na busca em largura a partir do canto
-   * inferior direito é a distância de Manhattan até ele; cada aresta vai do
-   * nó mais perto ao mais longe.
+   * Linhas internas da grade (as frestas entre as peças), em segmentos de uma
+   * casa. A ordem de cada segmento na varredura é a distância de Manhattan
+   * até o canto inferior direito, onde a última peça entrou.
    */
-  private buildEdges(): void {
+  private buildGrid(): void {
     const { left, top, side, gap, n } = this.geo;
     const cell = (side - gap) / n - gap;
     const at = (i: number) => i * (cell + gap) + gap / 2;
     const level = (r: number, c: number) => n - r + (n - c);
-    this.edges = [];
+    this.grid = [];
     for (let r = 0; r <= n; r++) {
       for (let c = 0; c <= n; c++) {
-        const x = left + at(c);
-        const y = top + at(r);
-        // Horizontal: de (r, c+1), mais perto do canto, para (r, c).
-        if (c < n) this.edges.push({ ax: left + at(c + 1), ay: y, bx: x, by: y, level: level(r, c + 1), pts: [] });
-        // Vertical: de (r+1, c) para (r, c).
-        if (r < n) this.edges.push({ ax: x, ay: top + at(r + 1), bx: x, by: y, level: level(r + 1, c), pts: [] });
+        // Só as linhas internas: o contorno é dos cometas.
+        if (c < n && r > 0 && r < n) {
+          this.grid.push({ ax: left + at(c + 1), ay: top + at(r), bx: left + at(c), by: top + at(r), level: level(r, c + 1) });
+        }
+        if (r < n && c > 0 && c < n) {
+          this.grid.push({ ax: left + at(c), ay: top + at(r + 1), bx: left + at(c), by: top + at(r), level: level(r + 1, c) });
+        }
       }
     }
   }
 
   private tick = (now: number) => {
     const t = now - this.start;
-    const dt = Math.min((now - this.last) / 1000, 0.05);
-    // Seção 7.3: média acima de 20 ms por quadro no começo → modo leve.
+    // Seção 7.3: quadros lentos no começo → modo leve (sem shadowBlur).
     if (t < 400 && now - this.last > 20) this.slowFrames++;
     if (!this.light && this.slowFrames >= 6) this.light = true;
     this.last = now;
-    this.frame++;
 
+    if (!this.lit && t >= SWEEP_END) {
+      this.lit = true;
+      if (this.vibration) navigator.vibrate?.([30, 60, 30]);
+    }
+    if (!this.settled && t >= SETTLE_AT) {
+      this.settled = true;
+      this.cb?.settle();
+    }
     if (!this.revealed && t >= REVEAL_AT) {
       this.revealed = true;
       this.cb?.reveal();
     }
-    if (t >= SETTLE_END) {
+    if (t >= END) {
       const cb = this.cb;
       this.stop();
       cb?.done();
       return;
     }
 
-    this.shake(t);
-    this.draw(t, dt);
+    this.jolt(t);
+    this.draw(t);
     this.raf = requestAnimationFrame(this.tick);
   };
 
-  /** Tranco ao encaixar e tremor na sobrecarga (nada disso com movimento reduzido). */
-  private shake(t: number): void {
+  /** Tranco de 4 px no encaixe (sem ele com movimento reduzido). */
+  private jolt(t: number): void {
     const b = this.board!;
-    let dx = 0;
-    let dy = 0;
-    if (!this.reduced) {
-      if (t < 120) dy = 4 * (1 - t / 120);
-      else if (t >= PROP_END && t < BLAST_END - 200) {
-        dx = rand(-3, 3);
-        dy = rand(-3, 3);
-      }
-    }
-    b.style.translate = dx || dy ? `${dx.toFixed(1)}px ${dy.toFixed(1)}px` : '';
-    this.offX = dx;
-    this.offY = dy;
+    const dy = !this.reduced && t < 140 ? 4 * (1 - t / 140) : 0;
+    b.style.translate = dy ? `0 ${dy.toFixed(1)}px` : '';
   }
 
-  private offX = 0;
-  private offY = 0;
-
-  private draw(t: number, dt: number): void {
+  private draw(t: number): void {
     const ctx = this.ctx;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.clearRect(0, 0, this.vw, this.vh);
 
-    // Sombreamento: escurece, segura e some por trás do clarão.
-    let shade = SHADE_ALPHA;
-    if (t < SHADE_END) shade *= t / SHADE_END;
-    else if (t >= OVERLOAD_END) shade *= Math.max(0, 1 - (t - OVERLOAD_END) / (BLAST_END - OVERLOAD_END));
+    // A tela escurece para o neon brilhar, e clareia no assentamento.
+    let shade = SHADE_ALPHA * Math.min(1, t / SNAP_END);
+    if (t >= SETTLE_AT) shade *= Math.max(0, 1 - (t - SETTLE_AT) / (END - SETTLE_AT));
     if (shade > 0) {
+      const { left, top, side } = this.geo;
       ctx.fillStyle = `rgb(0 0 0 / ${shade})`;
-      ctx.fillRect(0, 0, this.vw, this.vh);
+      // Escurece em volta do tabuleiro; o tabuleiro em si fica visível.
+      ctx.beginPath();
+      ctx.rect(0, 0, this.vw, this.vh);
+      ctx.rect(left + side, top, -side, side);
+      ctx.fill('evenodd');
     }
 
-    ctx.save();
-    ctx.translate(this.offX, this.offY);
-    this.drawCurrent(t);
-    ctx.restore();
-
-    if (!this.reduced) {
-      this.emitSparks(t);
-      this.drawBlast(t);
-      this.updateParticles(dt);
-      this.drawParticles();
+    // Intensidade geral do neon: acende, brilha uma vez e apaga.
+    let power = 1;
+    if (t >= SWEEP_END && t < GLOW_END && !this.reduced) {
+      const k = (t - SWEEP_END) / (GLOW_END - SWEEP_END);
+      power = 1 + 0.6 * Math.sin(k * Math.PI);
+    } else if (t >= SETTLE_AT) {
+      power = Math.max(0, 1 - (t - SETTLE_AT) / (END - SETTLE_AT - 100));
     }
+    if (power <= 0) return;
+
+    this.drawBorder(t, power);
+    this.drawGrid(t, power);
   }
 
-  /** A corrente pelas frestas. */
-  private drawCurrent(t: number): void {
-    if (t < SHADE_END * 0.75 || t >= BLAST_END) return;
-    const { n, side } = this.geo;
-    const levels = 2 * n;
-    const step = (PROP_END - SHADE_END) / levels;
-    const jitter = !this.reduced && this.frame % (this.light ? 4 : 3) === 0;
-    const amp = this.reduced ? 0 : 0.15;
-
-    let alpha = 1;
-    let width = 1;
-    if (t >= OVERLOAD_END) alpha = 1 - (t - OVERLOAD_END) / (BLAST_END - OVERLOAD_END);
-    else if (t >= PROP_END) {
-      // Sobrecarga: brilho subindo e pulsando abaixo de 3 Hz (WCAG 2.3.1).
-      const k = (t - PROP_END) / (OVERLOAD_END - PROP_END);
-      width = 1 + k * 0.8;
-      if (!this.reduced) alpha = 0.8 + 0.2 * Math.sin(k * Math.PI * 2 * 1.2);
-    }
-    if (this.reduced && t >= PROP_END) alpha *= 0.85;
-
-    const path = new Path2D();
-    for (const e of this.edges) {
-      const p = Math.min(1, Math.max(0, (t - SHADE_END - e.level * step) / step));
-      if (p <= 0) continue;
-      const bx = e.ax + (e.bx - e.ax) * p;
-      const by = e.ay + (e.by - e.ay) * p;
-      if (p < 1 || jitter || e.pts.length === 0) {
-        e.pts.length = 0;
-        e.pts.push(e.ax, e.ay);
-        jag(e.pts, e.ax, e.ay, bx, by, amp, 4);
-      }
-      path.moveTo(e.pts[0]!, e.pts[1]!);
-      for (let i = 2; i < e.pts.length; i += 2) path.lineTo(e.pts[i]!, e.pts[i + 1]!);
-    }
-
+  /** Traço de neon em três passadas: halo largo, tubo colorido e núcleo claro. */
+  private neon(path: Path2D, color: string, power: number, width: number): void {
     const ctx = this.ctx;
-    const base = Math.max(2, side / 120);
     ctx.globalCompositeOperation = 'lighter';
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.globalAlpha = 0.4 * alpha;
-    ctx.strokeStyle = this.glow;
-    ctx.lineWidth = base * 3 * width;
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = Math.min(1, 0.22 * power);
+    ctx.lineWidth = width * 4;
     if (!this.light) {
-      ctx.shadowColor = this.glow;
-      ctx.shadowBlur = 12;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 18;
     }
     ctx.stroke(path);
     ctx.shadowBlur = 0;
-    ctx.globalAlpha = alpha;
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = Math.max(1.5, base * 0.75) * width;
+    ctx.globalAlpha = Math.min(1, 0.75 * power);
+    ctx.lineWidth = width * 1.6;
+    ctx.stroke(path);
+    ctx.globalAlpha = Math.min(1, 0.9 * power);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = Math.max(1, width * 0.55);
     ctx.stroke(path);
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
   }
 
-  /** Faíscas saltando dos cruzamentos na sobrecarga e a explosão. */
-  private emitSparks(t: number): void {
-    if (t >= PROP_END - 200 && t < OVERLOAD_END) {
-      const per = this.light ? 2 : 4;
-      for (let i = 0; i < per; i++) {
-        const e = this.edges[(Math.random() * this.edges.length) | 0]!;
-        const a = Math.random() * Math.PI * 2;
-        const s = rand(120, 360);
-        this.spawn(e.bx, e.by, Math.cos(a) * s, Math.sin(a) * s - 120, rand(0.25, 0.6));
-      }
-    }
-    if (!this.blasted && t >= OVERLOAD_END) {
-      this.blasted = true;
-      const { cx, cy } = this.center();
-      const count = this.light ? 75 : 150;
-      for (let i = 0; i < count; i++) {
-        const a = Math.random() * Math.PI * 2;
-        const s = rand(200, 950);
-        this.spawn(cx + rand(-10, 10), cy + rand(-10, 10), Math.cos(a) * s, Math.sin(a) * s - 150, rand(0.6, 1.3));
-      }
-      // 8–12 raios radiais até as bordas da tela.
-      const reach = Math.hypot(this.vw, this.vh);
-      const k = 8 + ((Math.random() * 5) | 0);
-      this.bolts = [];
-      for (let i = 0; i < k; i++) {
-        const a = (i / k) * Math.PI * 2 + rand(-0.2, 0.2);
-        this.bolts.push([a, reach]);
-      }
-      if (this.vibration) navigator.vibrate?.([20, 40, 20, 40, 120]);
-    }
-  }
-
-  private center(): { cx: number; cy: number } {
+  /**
+   * Contorno: dois cometas saem do canto inferior direito, um subindo pela
+   * direita e outro indo pela base, e se encontram no canto superior esquerdo.
+   */
+  private drawBorder(t: number, power: number): void {
     const { left, top, side } = this.geo;
-    return { cx: left + side / 2, cy: top + side / 2 };
-  }
-
-  /** Clarão (uma vez só), anel de choque e raios radiais. */
-  private drawBlast(t: number): void {
-    if (t < OVERLOAD_END) return;
-    const ctx = this.ctx;
-    const k = (t - OVERLOAD_END) / (BLAST_END - OVERLOAD_END);
-    const { cx, cy } = this.center();
-
-    // Raios radiais, tremendo e sumindo.
-    const boltK = Math.min(1, (t - OVERLOAD_END) / (BLAST_END - OVERLOAD_END + 200));
-    if (boltK < 1) {
-      const path = new Path2D();
-      for (const [a, reach] of this.bolts as [number, number][]) {
-        const pts = [cx, cy];
-        jag(pts, cx, cy, cx + Math.cos(a) * reach, cy + Math.sin(a) * reach, 0.12, 5);
-        path.moveTo(pts[0]!, pts[1]!);
-        for (let i = 2; i < pts.length; i += 2) path.lineTo(pts[i]!, pts[i + 1]!);
-      }
+    const L = left + 1;
+    const T = top + 1;
+    const R = left + side - 1;
+    const B = top + side - 1;
+    const k = this.reduced ? Math.min(1, Math.max(0, (t - SNAP_END) / 300)) : easeInOut(clamp01((t - SNAP_END) / (BORDER_END - SNAP_END)));
+    if (k <= 0) return;
+    const width = Math.max(2.5, side / 110);
+    const path = new Path2D();
+    if (this.reduced) {
+      // Sem cometas: o contorno acende inteiro, devagar.
+      path.rect(L, T, R - L, B - T);
+      this.neon(path, this.neonB, power * k, width);
+      return;
+    }
+    const len = 2 * (R - L) * k;
+    const heads: Array<[number, number]> = [];
+    // Cometa 1: sobe pela direita, depois vai pela borda de cima.
+    heads.push(trace(path, [[R, B], [R, T], [L, T]], len));
+    // Cometa 2: vai pela base, depois sobe pela esquerda.
+    heads.push(trace(path, [[R, B], [L, B], [L, T]], len));
+    this.neon(path, this.neonB, power, width);
+    // Cabeças dos cometas: um ponto de luz mais forte, enquanto correm.
+    if (k < 1) {
+      const ctx = this.ctx;
       ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = 0.5 * (1 - boltK);
-      ctx.strokeStyle = this.glow;
-      ctx.lineWidth = 6;
-      ctx.stroke(path);
-      ctx.globalAlpha = 1 - boltK;
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 1.5;
-      ctx.stroke(path);
+      for (const [x, y] of heads) {
+        const g = ctx.createRadialGradient(x, y, 0, x, y, width * 6);
+        g.addColorStop(0, 'rgb(255 255 255 / 0.95)');
+        g.addColorStop(0.3, this.neonB);
+        g.addColorStop(1, 'rgb(0 0 0 / 0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(x - width * 6, y - width * 6, width * 12, width * 12);
+      }
       ctx.globalCompositeOperation = 'source-over';
     }
-
-    // Anel de choque saindo do centro.
-    const ringK = Math.min(1, (t - OVERLOAD_END) / 500);
-    if (ringK < 1) {
-      const r = easeOut(ringK) * Math.hypot(this.vw, this.vh) * 0.6;
-      ctx.globalAlpha = 1 - ringK;
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 2 + 10 * (1 - ringK);
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-
-    // Clarão branco: 0 → 0,9 → 0.
-    if (k < 1) {
-      const flash = k < 0.25 ? (k / 0.25) * 0.9 : 0.9 * (1 - (k - 0.25) / 0.75);
-      ctx.globalAlpha = flash;
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(0, 0, this.vw, this.vh);
-    }
-    ctx.globalAlpha = 1;
   }
 
-  private spawn(x: number, y: number, vx: number, vy: number, life: number): void {
-    const i = this.pnext;
-    this.pnext = (i + 1) % MAX_PARTICLES;
-    this.px[i] = x;
-    this.py[i] = y;
-    this.pvx[i] = vx;
-    this.pvy[i] = vy;
-    this.plife[i] = life;
-    this.pmax[i] = life;
-  }
-
-  private updateParticles(dt: number): void {
-    const drag = Math.pow(0.15, dt);
-    for (let i = 0; i < MAX_PARTICLES; i++) {
-      if (this.plife[i]! <= 0) continue;
-      this.plife[i]! -= dt;
-      this.pvx[i]! *= drag;
-      this.pvy[i] = this.pvy[i]! * drag + GRAVITY * dt;
-      this.px[i]! += this.pvx[i]! * dt;
-      this.py[i]! += this.pvy[i]! * dt;
+  /** Varredura: as linhas da grade acendem na diagonal, do canto da última peça. */
+  private drawGrid(t: number, power: number): void {
+    if (t < BORDER_END - 200) return;
+    const levels = 2 * this.geo.n + 1;
+    const step = (SWEEP_END - (BORDER_END - 200)) / levels;
+    const path = new Path2D();
+    for (const s of this.grid) {
+      const p = clamp01((t - (BORDER_END - 200) - s.level * step) / (step * 2));
+      if (p <= 0) continue;
+      path.moveTo(s.ax, s.ay);
+      path.lineTo(s.ax + (s.bx - s.ax) * p, s.ay + (s.by - s.ay) * p);
     }
-  }
-
-  /** Cada faísca é um risco na direção do movimento: branca quando nova, cor do brilho ao esfriar. */
-  private drawParticles(): void {
-    const ctx = this.ctx;
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.lineCap = 'round';
-    for (const hot of [true, false]) {
-      ctx.strokeStyle = hot ? '#fff7d6' : this.glow;
-      ctx.lineWidth = hot ? 2 : 1.5;
-      for (let i = 0; i < MAX_PARTICLES; i++) {
-        const life = this.plife[i]!;
-        if (life <= 0) continue;
-        const k = life / this.pmax[i]!;
-        if (k > 0.5 !== hot) continue;
-        ctx.globalAlpha = Math.min(1, k * 1.5);
-        ctx.beginPath();
-        ctx.moveTo(this.px[i]!, this.py[i]!);
-        ctx.lineTo(this.px[i]! - this.pvx[i]! * 0.025, this.py[i]! - this.pvy[i]! * 0.025);
-        ctx.stroke();
-      }
-    }
-    ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = 'source-over';
+    this.neon(path, this.neonA, power, Math.max(1.5, this.geo.side / 200));
   }
 }
 
 /**
- * Linha quebrada por deslocamento do ponto médio: acrescenta a `out` os
- * pontos de (x1, y1) exclusive até (x2, y2) inclusive.
+ * Acrescenta a `path` o trecho inicial de comprimento `len` da polilinha
+ * `pts` e devolve a ponta.
  */
-function jag(out: number[], x1: number, y1: number, x2: number, y2: number, amp: number, depth: number): void {
-  if (depth === 0 || amp === 0) {
-    out.push(x2, y2);
-    return;
+function trace(path: Path2D, pts: Array<[number, number]>, len: number): [number, number] {
+  let [x, y] = pts[0]!;
+  path.moveTo(x, y);
+  let left = len;
+  for (let i = 1; i < pts.length && left > 0; i++) {
+    const [nx, ny] = pts[i]!;
+    const d = Math.hypot(nx - x, ny - y);
+    const k = Math.min(1, left / d);
+    x += (nx - x) * k;
+    y += (ny - y) * k;
+    path.lineTo(x, y);
+    left -= d;
   }
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  const len = Math.hypot(dx, dy);
-  const off = (Math.random() * 2 - 1) * amp * len;
-  const mx = (x1 + x2) / 2 + (len ? (-dy / len) * off : 0);
-  const my = (y1 + y2) / 2 + (len ? (dx / len) * off : 0);
-  jag(out, x1, y1, mx, my, amp, depth - 1);
-  jag(out, mx, my, x2, y2, amp, depth - 1);
+  return [x, y];
 }
 
-function rand(a: number, b: number): number {
-  return a + Math.random() * (b - a);
+function clamp01(k: number): number {
+  return Math.max(0, Math.min(1, k));
 }
 
-function easeOut(k: number): number {
-  return 1 - (1 - k) ** 3;
+function easeInOut(k: number): number {
+  return k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
 }

@@ -24,25 +24,64 @@ export class BoardView {
     this.size = board.size;
     this.el.style.setProperty('--size', String(board.size));
     this.el.dataset.size = String(board.size);
+    this.el.classList.remove('gaps-dark', 'seamless');
     this.el.replaceChildren();
     this.tileEls.clear();
     board.tiles.forEach((tile) => {
       if (tile === 0) return;
-      const t = document.createElement('div');
-      t.className = 'tile';
-      const num = document.createElement('span');
-      num.className = 'tile-num';
-      num.textContent = String(tile);
-      t.append(num);
-      // Pedaço da imagem que esta peça mostra: o da sua casa de origem.
-      const home = tile - 1;
-      const max = board.size - 1;
-      t.style.backgroundPosition = `${(colOf(board.size, home) / max) * 100}% ${(rowOf(board.size, home) / max) * 100}%`;
-      t.setAttribute('role', 'button');
+      const t = this.makeTile(tile);
       this.tileEls.set(tile, t);
       this.el.append(t);
     });
     this.update(board);
+  }
+
+  private makeTile(tile: number): HTMLDivElement {
+    const t = document.createElement('div');
+    t.className = 'tile';
+    const num = document.createElement('span');
+    num.className = 'tile-num';
+    num.textContent = String(tile);
+    t.append(num);
+    // Pedaço da imagem que esta peça mostra: o da sua casa de origem.
+    const home = tile - 1;
+    const max = this.size - 1;
+    t.style.backgroundPosition = `${(colOf(this.size, home) / max) * 100}% ${(rowOf(this.size, home) / max) * 100}%`;
+    t.setAttribute('role', 'button');
+    return t;
+  }
+
+  /**
+   * Vitória (seção 7.1): a peça que faltava (N²) aparece na casa vazia, no
+   * canto inferior direito, completando a imagem.
+   */
+  showLastPiece(): void {
+    const last = this.size * this.size;
+    if (this.tileEls.has(last)) return;
+    const t = this.makeTile(last);
+    t.classList.add('tile--last');
+    t.removeAttribute('role');
+    this.tileEls.set(last, t);
+    this.el.append(t);
+    this.place(t, last - 1);
+  }
+
+  /** As frestas escurecem no início do efeito de vitória. */
+  darkenGaps(on: boolean): void {
+    this.el.classList.toggle('gaps-dark', on);
+  }
+
+  /** Assentamento: as frestas fecham e a imagem aparece inteira (seção 7.1). */
+  setSeamless(board: Board, on: boolean): void {
+    this.el.classList.toggle('seamless', on);
+    this.update(board);
+  }
+
+  private place(t: HTMLDivElement, i: number): void {
+    const r = rowOf(this.size, i);
+    const c = colOf(this.size, i);
+    const g = this.gapPct();
+    t.style.transform = `translate3d(${c * 100 + c * g}%, ${r * 100 + r * g}%, 0)`;
   }
 
   /** Imagem das peças (null = só números). `pixelated` para pixel art. */
@@ -60,10 +99,12 @@ export class BoardView {
       if (!t) return;
       const r = rowOf(this.size, i);
       const c = colOf(this.size, i);
-      t.style.transform = `translate3d(${c * 100 + c * this.gapPct()}%, ${r * 100 + r * this.gapPct()}%, 0)`;
+      this.place(t, i);
       t.dataset.index = String(i);
       t.setAttribute('aria-label', `Peça ${tile}, linha ${r + 1}, coluna ${c + 1}`);
     });
+    const last = this.tileEls.get(this.size * this.size);
+    if (last) this.place(last, this.size * this.size - 1);
   }
 
   /**

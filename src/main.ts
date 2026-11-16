@@ -30,6 +30,7 @@ import { createInstallHint } from './ui/installHint';
 import { createTitleScreen } from './ui/title';
 import { createMainMenu } from './ui/mainMenu';
 import { createStatsScreen } from './ui/stats';
+import { createResultPanel } from './ui/result';
 
 // Bloqueios da seção 9.2 (menu de toque longo e pinça do iOS).
 document.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -206,6 +207,14 @@ const pauseScreen = createPauseScreen({
   menu: () => go('menu'),
 });
 
+const resultPanel = createResultPanel({
+  newGame: () => newGame(),
+  menu: () => go('menu'),
+});
+resultPanel.el.addEventListener('click', (e) => {
+  if ((e.target as HTMLElement).closest('button')) sfx.beep();
+});
+
 const titleScreen = createTitleScreen(() => {
   go('menu');
   // Seção 8.1: partida salva ao fechar o app; ao reabrir, oferece continuar.
@@ -304,7 +313,7 @@ function startGame(): void {
   else go('game', () => newGame());
 }
 app.dataset.screen = screen;
-app.append(titleScreen, mainMenu.el, statsScreen.el, galleryScreen.el, topBar, display, view.el, bottomBar, pauseScreen.el, menu.el, installHint.el, victory.canvas, createRotateHint());
+app.append(titleScreen, mainMenu.el, statsScreen.el, galleryScreen.el, topBar, display, view.el, bottomBar, resultPanel.el, pauseScreen.el, menu.el, installHint.el, victory.canvas, createRotateHint());
 setupFullscreen();
 /** Conta os pedidos de imagem para ignorar recortes que chegam atrasados. */
 let imageRequest = 0;
@@ -507,25 +516,6 @@ const countdown = document.createElement('div');
 countdown.className = 'countdown';
 countdown.setAttribute('aria-live', 'assertive');
 
-const winMsg = document.createElement('div');
-winMsg.className = 'win-msg';
-winMsg.setAttribute('role', 'status');
-winMsg.setAttribute('aria-label', 'Rachou a Cuca!');
-// Mesma arte da logomarca: palavra de cima laranja, de baixo azul (ui/brand).
-for (const [word, mod] of [
-  ['RACHOU', 'top'],
-  ['A CUCA!', 'bottom'],
-] as const) {
-  const w = document.createElement('span');
-  w.className = `win-word win-word--${mod}`;
-  w.dataset.text = word;
-  w.setAttribute('aria-hidden', 'true');
-  const fill = document.createElement('span');
-  fill.textContent = word;
-  w.append(fill);
-  winMsg.append(w);
-}
-
 /**
  * Partida nova (seção 3): sorteia paleta, imagem e embaralhamento.
  * REINICIAR passa a mesma semente e mantém paleta e imagem.
@@ -576,7 +566,7 @@ function newGame(replay?: Replay): void {
   stopVictorySound = () => {};
   queue.length = 0;
   sliding = false;
-  winMsg.remove();
+  resultPanel.hide();
   timer.reset();
   view.mount(board);
   applyNumbers();
@@ -651,10 +641,6 @@ function apply(result: MoveResult): void {
     clearTimeout(saveTimer);
     void clearSession();
     lastOutcome = recordGame(gameRecord('won'));
-    const outcomeOf = lastOutcome;
-    void outcomeOf.then((o) => {
-      if (lastOutcome === outcomeOf && (o.newBestTime || o.newBestMoves)) status.textContent = 'NOVO RECORDE!';
-    });
   }
   sliding = true;
   const id = gameId;
@@ -667,11 +653,30 @@ function apply(result: MoveResult): void {
   }, SLIDE_MS);
 }
 
+/** Painel de resultado (seção 7.4), com a comparação com o recorde do tamanho. */
+async function showResult(id: number): Promise<void> {
+  const timeMs = Math.round(timer.elapsedMs());
+  const o = lastOutcome ? await lastOutcome.catch(() => null) : null;
+  if (id !== gameId) return;
+  resultPanel.show({
+    size,
+    timeMs,
+    moves,
+    peeks,
+    previousBestTimeMs: o?.previousBestTimeMs,
+    previousBestMoves: o?.previousBestMoves,
+    newBestTime: !!o?.newBestTime,
+    newBestMoves: !!o?.newBestMoves,
+  });
+}
+
 /** Fim do deslize: balanço, estalo e vibração (seção 6), ou a vitória (seção 7). */
 function impact(result: MoveResult, solved: boolean): void {
   if (settings.vibration) navigator.vibrate?.(8);
   if (solved) {
-    view.bump(result.direction, true);
+    // Seção 7.1: a peça que faltava entra no encaixe e as frestas escurecem.
+    view.showLastPiece();
+    view.darkenGaps(true);
     // A música sai de cena durante o efeito e volta quando ele termina.
     holdMusic('victory', true);
     const stopSfx = sfx.victory(VICTORY_TIMES);
@@ -679,8 +684,15 @@ function impact(result: MoveResult, solved: boolean): void {
       stopSfx();
       holdMusic('victory', false);
     };
+    const id = gameId;
     victory.play(view.el, size, {
-      reveal: () => view.el.append(winMsg),
+      // Assentamento: as frestas fecham e a imagem aparece inteira.
+      settle: () => {
+        if (id !== gameId) return;
+        view.darkenGaps(false);
+        view.setSeamless(board, true);
+      },
+      reveal: () => void showResult(id),
       done: () => stopVictorySound(),
     });
     return;
@@ -764,7 +776,7 @@ function restoreSession(s: SavedSession): void {
   queue.length = 0;
   victory.cancel();
   countdown.remove();
-  winMsg.remove();
+  resultPanel.hide();
   status.textContent = '';
   board = createBoard(size, s.tiles);
   view.mount(board);

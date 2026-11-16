@@ -161,10 +161,9 @@ export interface VictoryTimes {
 }
 
 /**
- * Som da vitória (seção 7.2): estalo forte do encaixe, zumbido de dente-de-
- * -serra a 60 Hz com passa-baixa abrindo de 200 Hz a 2 kHz durante a
- * propagação, estalos de faísca, subida de tom na sobrecarga e, na explosão,
- * ruído de 400 ms com queda e um "boom" senoidal de 50 Hz.
+ * Som da vitória (seção 7, versão neon): estalo forte do encaixe, o neon
+ * ligando (estalos do reator e zumbido de 120 Hz), um arpejo chiptune
+ * enquanto a luz percorre o tabuleiro e um acorde quando ele acende todo.
  * Retorna uma função que corta o som (toque para pular, novo jogo).
  */
 export function victory(times: VictoryTimes): () => void {
@@ -183,58 +182,57 @@ export function victory(times: VictoryTimes): () => void {
   click(2, 0, bus);
   thud(1, 0, bus);
 
-  // Zumbido elétrico.
-  const hum = c.createOscillator();
-  hum.type = 'sawtooth';
-  hum.frequency.setValueAtTime(60, ps);
-  hum.frequency.setValueAtTime(60, pe);
-  hum.frequency.exponentialRampToValueAtTime(110, bl);
-  const lp = c.createBiquadFilter();
-  lp.type = 'lowpass';
-  lp.Q.value = 6;
-  lp.frequency.setValueAtTime(200, ps);
-  lp.frequency.exponentialRampToValueAtTime(2000, pe);
-  lp.frequency.exponentialRampToValueAtTime(3500, bl);
-  const humGain = c.createGain();
-  humGain.gain.setValueAtTime(0, ps);
-  humGain.gain.linearRampToValueAtTime(BASE * 1.2, ps + 0.3);
-  humGain.gain.linearRampToValueAtTime(BASE * 1.8, pe);
-  humGain.gain.linearRampToValueAtTime(BASE * 2.6, bl - 0.01);
-  humGain.gain.linearRampToValueAtTime(0, bl + 0.02);
-  hum.connect(lp).connect(humGain).connect(bus);
-  hum.start(ps);
-  hum.stop(bl + 0.05);
-  nodes.push(hum);
-
-  // Faíscas: estalos de ruído agudo, cada vez mais frequentes.
-  const span = bl - ps;
-  for (let i = 0; i < 45; i++) {
-    const k = Math.sqrt(Math.random()); // mais perto do fim
-    const t = ps + k * span;
+  // Neon ligando: o reator estala algumas vezes antes de firmar.
+  for (const dt of [0, 0.07, 0.11, 0.2]) {
     const hp = c.createBiquadFilter();
     hp.type = 'highpass';
-    hp.frequency.value = rand(2500, 6000);
-    const src = noise(c, t, 0.012);
-    src.connect(hp).connect(env(c, t, BASE * rand(0.6, 1.6) * (0.5 + k), 0.001, rand(0.008, 0.02))).connect(bus);
+    hp.frequency.value = 1800;
+    const src = noise(c, ps + dt, 0.02);
+    src.connect(hp).connect(env(c, ps + dt, BASE * 0.9, 0.001, 0.02)).connect(bus);
     nodes.push(src);
   }
 
-  // Explosão: ruído com queda e passa-baixa fechando.
-  const boomLp = c.createBiquadFilter();
-  boomLp.type = 'lowpass';
-  boomLp.frequency.setValueAtTime(5000, bl);
-  boomLp.frequency.exponentialRampToValueAtTime(250, bl + 0.4);
-  const blast = noise(c, bl, 0.45);
-  blast.connect(boomLp).connect(env(c, bl, BASE * 5, 0.003, 0.4)).connect(bus);
-  nodes.push(blast);
+  // Zumbido baixo do tubo de neon (120 Hz), aceso até o fim do brilho.
+  const hum = c.createOscillator();
+  hum.type = 'square';
+  hum.frequency.value = 120;
+  const lp = c.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 700;
+  const humGain = c.createGain();
+  humGain.gain.setValueAtTime(0, ps);
+  humGain.gain.linearRampToValueAtTime(BASE * 0.35, ps + 0.25);
+  humGain.gain.setValueAtTime(BASE * 0.35, bl + 0.3);
+  humGain.gain.linearRampToValueAtTime(0, bl + 0.8);
+  hum.connect(lp).connect(humGain).connect(bus);
+  hum.start(ps);
+  hum.stop(bl + 0.9);
+  nodes.push(hum);
 
-  const boom = c.createOscillator();
-  boom.frequency.setValueAtTime(110, bl);
-  boom.frequency.exponentialRampToValueAtTime(50, bl + 0.08);
-  boom.connect(env(c, bl, BASE * 6, 0.004, 0.6)).connect(bus);
-  boom.start(bl);
-  boom.stop(bl + 0.7);
-  nodes.push(boom);
+  // Arpejo chiptune enquanto a luz percorre o tabuleiro (dó maior, subindo).
+  const notes = [523.25, 659.25, 783.99, 1046.5, 1318.5, 1568, 2093];
+  const span = pe - ps;
+  notes.forEach((f, i) => {
+    const t = ps + (i / notes.length) * span;
+    const o = c.createOscillator();
+    o.type = 'square';
+    o.frequency.value = f;
+    o.connect(env(c, t, BASE * 0.5, 0.004, 0.16)).connect(bus);
+    o.start(t);
+    o.stop(t + 0.2);
+    nodes.push(o);
+  });
+
+  // Tabuleiro todo aceso: acorde brilhante que se desfaz devagar.
+  for (const f of [523.25, 659.25, 783.99, 1046.5]) {
+    const o = c.createOscillator();
+    o.type = 'triangle';
+    o.frequency.value = f;
+    o.connect(env(c, bl, BASE * 0.8, 0.01, 0.9)).connect(bus);
+    o.start(bl);
+    o.stop(bl + 1);
+    nodes.push(o);
+  }
 
   let stopped = false;
   return () => {

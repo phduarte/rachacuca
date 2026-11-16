@@ -223,33 +223,31 @@ Um "tic" curto e baixo, como duas peças de acrílico se tocando, tocado **quand
 
 ---
 
-## 7. Efeito de vitória: corrente elétrica e explosão
+## 7. Efeito de vitória: luz neon percorrendo o tabuleiro
 
-Duração total de cerca de 2,8 s. Um toque na tela pula para o resultado.
+Duração total de cerca de 2,8 s. Um toque na tela pula para o resultado. (Na primeira versão era uma corrente elétrica pelas frestas terminando numa explosão; foi trocada por luz neon.)
 
 ### 7.1 Sequência
 
 | Tempo | Fase | O que acontece |
 |---|---|---|
-| 0 – 300 ms | Encaixe | A última peça aparece na casa vazia com um estalo mais forte. O tabuleiro dá um tranco de 4 px. As frestas entre as peças escurecem. |
-| 300 – 1700 ms | Propagação | Uma corrente elétrica nasce no canto inferior direito (onde a última peça entrou) e corre pelas **frestas entre as peças** (as linhas da grade), ramificando a cada cruzamento até cobrir a grade toda. |
-| 1700 – 2100 ms | Sobrecarga | A grade toda fica acesa e piscando, o brilho aumenta, o zumbido sobe de tom, faíscas saltam dos cruzamentos e o tabuleiro treme (±3 px). |
-| 2100 – 2400 ms | Explosão | Clarão branco na tela inteira (opacidade 0 → 0,9 → 0), anel de choque saindo do centro, 8–12 raios radiais até as bordas da tela, 150 partículas de faísca com gravidade. |
-| 2400 – 2800 ms | Assentamento | Os raios somem, ficam brasas, e a imagem completa aparece sem frestas. O painel de resultado sobe. |
+| 0 – 300 ms | Encaixe | A última peça aparece na casa vazia com um estalo mais forte. O tabuleiro dá um tranco de 4 px. As frestas entre as peças escurecem e a tela em volta do tabuleiro escurece. |
+| 300 – 1100 ms | Contorno | Dois cometas de neon saem do canto inferior direito (onde a última peça entrou), um subindo pela direita e outro correndo pela base, e se encontram no canto superior esquerdo, deixando o contorno do tabuleiro aceso. |
+| 900 – 1900 ms | Varredura | As linhas da grade (as frestas) acendem em neon na diagonal, a partir do canto da última peça, até cobrir o tabuleiro todo. |
+| 1900 – 2300 ms | Aceso | O tabuleiro inteiro brilha: a intensidade sobe e desce uma única vez (sem pisca-pisca). Vibração curta no Android. |
+| 2300 – 2800 ms | Assentamento | O neon apaga, as frestas fecham e a imagem completa aparece sem emendas. O painel de resultado sobe. |
 
 ### 7.2 Implementação
 - `<canvas>` sobreposto ao tabuleiro, do tamanho da viewport, com `devicePixelRatio` limitado a 2.
-- **Grafo das frestas:** os nós são os cruzamentos da grade ((N+1)² pontos) e as arestas são os segmentos de fresta entre nós vizinhos. A propagação é uma busca em largura a partir do nó do canto inferior direito. Cada aresta "acende" quando a frente chega nela, levando cerca de 1400 ms / (2N) por nível.
-- **Raio:** cada aresta acesa vira uma linha quebrada por deslocamento do ponto médio (midpoint displacement, 4 a 5 subdivisões, amplitude de 15% do comprimento). O caminho é **sorteado de novo a cada 2 ou 3 quadros**, o que faz o raio tremer.
-- **Brilho:** desenhar cada raio duas vezes, com `globalCompositeOperation = 'lighter'`: uma vez largo (6 px, cor `--glow`, opacidade 0,35, `shadowBlur` 12) e outra fino (1,5 px, branco). Não usar `shadowBlur` em celular fraco (ver 7.3).
-- **Faíscas:** sistema simples de partículas (posição, velocidade, vida) com pool pré-alocado, sem criar objetos durante a animação.
-- **Som:** oscilador dente-de-serra de 60 Hz → filtro passa-baixa com corte subindo de 200 Hz a 2 kHz durante a propagação, mais estalos de ruído aleatórios. Na explosão: ruído branco de 400 ms com queda e um "boom" senoidal de 50 Hz.
-- **Vibração (Android):** padrão `[20, 40, 20, 40, 120]` na explosão.
+- **Neon:** cada traço é desenhado três vezes com `globalCompositeOperation = 'lighter'`: halo largo (cor da paleta, opacidade baixa, `shadowBlur` 18), tubo colorido e núcleo branco fino. Contorno na cor `--accent`, grade na cor `--glow`.
+- **Grade:** segmentos de uma casa nas linhas internas; a ordem de cada um na varredura é a distância de Manhattan até o canto inferior direito.
+- **Som:** estalos do reator do neon ligando, zumbido de 120 Hz, arpejo chiptune subindo enquanto a luz corre e um acorde quando o tabuleiro acende todo.
+- **Vibração (Android):** padrão `[30, 60, 30]` quando o tabuleiro acende.
 
 ### 7.3 Desempenho e acessibilidade
-- Meta: 60 fps num aparelho intermediário de 2022. Se a média passar de 20 ms por quadro nos primeiros 200 ms, cair para o **modo leve**: sem `shadowBlur`, metade das partículas, raios sorteados a cada 4 quadros.
-- Com `prefers-reduced-motion: reduce`: sem tremor nem clarão. As frestas acendem em sequência com um brilho suave e somem. Nada de pisca-pisca.
-- **Segurança contra fotossensibilidade:** o clarão de tela cheia acontece **uma única vez**. O piscar da grade fica abaixo de 3 vezes por segundo em área grande (diretriz WCAG 2.3.1).
+- Meta: 60 fps num aparelho intermediário de 2022. Se os primeiros quadros passarem de 20 ms, cair para o **modo leve** (sem `shadowBlur`).
+- Com `prefers-reduced-motion: reduce`: sem tranco nem cometas. O contorno e a grade acendem em sequência com brilho suave e apagam.
+- **Segurança contra fotossensibilidade:** nada pisca; o brilho sobe e desce uma única vez, e "NOVO RECORDE!" pisca a 1 Hz (abaixo de 3 vezes por segundo, WCAG 2.3.1).
 
 ### 7.4 Painel de resultado
 "VOCÊ RACHOU A CUCA!" em fonte pixel, com: tempo, movimentos, espiadas, comparação com o recorde do tamanho ("NOVO RECORDE!" piscando, se for o caso) e botões **NOVO JOGO** / **MENU**.
@@ -515,7 +513,7 @@ interface Aggregates {
 - [ ] Com movimento reduzido, não há balanço e o som continua.
 
 **Vitória**
-- [ ] A corrente começa no canto da última peça e percorre todas as frestas antes da explosão.
+- [ ] A luz neon começa no canto da última peça e percorre o contorno e todas as frestas antes do assentamento.
 - [ ] Um toque pula o efeito direto para o resultado.
 - [ ] O efeito roda a 50+ fps ou cai sozinho para o modo leve.
 
@@ -543,7 +541,7 @@ interface Aggregates {
 | **4. PWA** | App instalável | Manifest, service worker, tela cheia, orientação, wake lock, botão voltar, convite de instalação |
 | **5. Dados** | Progresso salvo | IndexedDB, partida em andamento, histórico, recordes, tela de estatísticas |
 | **6. Banco de imagens** | Personalização | Importar, recortar, galeria, ligar/desligar, backup |
-| **7. Vitória** | Final marcante | Corrente elétrica, explosão, som, modo leve, versão de movimento reduzido |
+| **7. Vitória** | Final marcante | Luz neon, som, modo leve, versão de movimento reduzido |
 | **8. Polimento** | Lançamento | Testes em aparelhos reais (Android simples, iPhone), acessibilidade, Lighthouse, créditos e licenças |
 
 ---

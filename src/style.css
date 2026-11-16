@@ -195,7 +195,7 @@ body {
       )
       right var(--gap) bottom var(--gap) / var(--cell) var(--cell) no-repeat padding-box,
     /* fundo */
-    linear-gradient(var(--frame), var(--frame)) padding-box,
+    linear-gradient(var(--gap-color, var(--frame)), var(--gap-color, var(--frame))) padding-box,
     /* aro */
     linear-gradient(
         160deg,
@@ -1820,4 +1820,171 @@ button.gallery-card {
   font-size: 8px;
   letter-spacing: 2px;
   opacity: 0.7;
+}
+
+/* Vitória (seção 7.1): a última peça entra no encaixe... */
+.tile--last {
+  animation: last-in 260ms cubic-bezier(0.2, 0.9, 0.3, 1.4) both;
+}
+
+@keyframes last-in {
+  from { scale: 1.35; opacity: 0; }
+}
+
+/* ...as frestas escurecem para a luz neon passar... */
+.board.gaps-dark {
+  --gap-color: #04040a;
+}
+
+/* ...e, no assentamento, as frestas fecham: a imagem completa, sem emendas. */
+.board.seamless {
+  --gap: 0px;
+}
+
+.board.seamless .tile {
+  box-shadow: none;
+  transition:
+    transform 400ms cubic-bezier(0.3, 0.7, 0.2, 1),
+    width 400ms cubic-bezier(0.3, 0.7, 0.2, 1),
+    height 400ms cubic-bezier(0.3, 0.7, 0.2, 1);
+}
+
+.board.seamless.has-image .tile {
+  background-image: var(--img);
+  background-size: calc(var(--size) * 100%) calc(var(--size) * 100%);
+}
+
+.board.seamless.has-image .tile-num {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile--last { animation: none; }
+  .board.seamless .tile { transition: none; }
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Painel de resultado (seção 7.4): sobe da base no assentamento */
+.result {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  z-index: 7;
+  width: min(100vw, 480px);
+  max-height: 88dvh;
+  overflow: auto;
+  padding: 14px 16px calc(env(safe-area-inset-bottom) + 14px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg);
+  border: 4px solid var(--bezel);
+  border-bottom: 0;
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 -10px 30px rgb(0 0 0 / 0.5);
+  translate: -50% 100%;
+  transition: translate 400ms cubic-bezier(0.2, 0.9, 0.3, 1.1);
+}
+
+.result[hidden] {
+  display: none;
+}
+
+.result.show {
+  translate: -50% 0;
+}
+
+.result-title {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font: 700 clamp(28px, 8.5vw, 48px) / 1.02 'Fredoka', var(--tile-font);
+  rotate: -4deg;
+  filter: drop-shadow(0 0.06em 0.06em rgb(0 0 0 / 0.5));
+}
+
+.result-you {
+  font: 8px var(--font);
+  letter-spacing: 2px;
+  color: var(--ui-text);
+  rotate: 4deg;
+  margin-bottom: 4px;
+}
+
+/* NOVO RECORDE! pisca a 1 Hz (abaixo de 3 vezes por segundo, seção 7.3) */
+.result-record {
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: 2px;
+  color: var(--accent);
+  text-shadow: 0 0 8px var(--glow);
+  animation: press-blink 1s steps(1) infinite;
+}
+
+.result-record[hidden] {
+  display: none;
+}
+
+.result-rows {
+  width: 100%;
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  gap: 8px 16px;
+}
+
+.result-rows dt {
+  font-size: 8px;
+  letter-spacing: 1px;
+  opacity: 0.75;
+}
+
+.result-rows dd {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  font-size: 16px;
+  text-align: right;
+  justify-content: flex-end;
+}
+
+.result-rows small {
+  font-size: 8px;
+  opacity: 0.7;
+}
+
+.result-best {
+  color: color-mix(in srgb, var(--accent), #fff 30%);
+}
+
+.result-actions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.result-actions button {
+  min-height: 48px;
+  padding: 0 8px;
+  font-size: 16px;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .result { transition: none; }
+  .result-record { animation: none; }
 }
