@@ -225,18 +225,3 @@ export function fileImageUrl(id: string): Promise<{ url: string; pixelated: bool
   }
   return hit;
 }
-
-/** Lê uma foto escolhida pelo jogador, recorta o quadrado central e reduz (JPEG). */
-export async function photoFromFile(file: File, side = 512): Promise<Blob> {
-  const bitmap = await createImageBitmap(file);
-  const s = Math.min(bitmap.width, bitmap.height);
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = side;
-  canvas
-    .getContext('2d')!
-    .drawImage(bitmap, (bitmap.width - s) / 2, (bitmap.height - s) / 2, s, s, 0, 0, side, side);
-  bitmap.close();
-  return new Promise((resolve, reject) =>
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('foto'))), 'image/jpeg', 0.85),
-  );
-}

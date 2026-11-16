@@ -3,9 +3,7 @@
  * imagem das peças, volume, música e vibração. As escolhas valem na hora; fechar volta ao jogo.
  */
 import { PALETTES, type Palette } from '../theme/palettes';
-import { BUILTIN_IMAGES, FILE_IMAGES, builtinImageUrl } from '../theme/images';
 import { creditsList } from './credits';
-import { ORIGINAL_IMAGES, originalImageUrl } from '../theme/originals';
 
 export interface MenuState {
   size: number;
@@ -15,7 +13,8 @@ export interface MenuState {
   numbers: 'auto' | 'on' | 'off';
   retro: boolean;
   crt: boolean;
-  photo: string | null;
+  /** Imagens do catálogo (as do jogo e as do jogador). */
+  images: Array<{ id: string; title: string; thumb: string; pixelated: boolean }>;
   volume: number;
   music: boolean;
   vibration: boolean;
@@ -35,8 +34,8 @@ export interface MenuHandlers {
   numbers(mode: 'auto' | 'on' | 'off'): void;
   retro(on: boolean): void;
   crt(on: boolean): void;
-  /** Recebe o arquivo escolhido; resolve quando a foto já está em uso. */
-  photo(file: File): Promise<void>;
+  /** Abre a galeria de imagens (importar, ligar/desligar, apagar). */
+  gallery(): void;
   /** Nível de 0 (mudo) a 3 (alto). */
   volume(level: number): void;
   music(on: boolean): void;
@@ -103,14 +102,10 @@ export function createMenu(
 
   const images = section('IMAGEM');
   const imageGrid = grid('pictures');
-  const fileInput = document.createElement('input');
-  fileInput.type = 'file';
-  fileInput.accept = 'image/*';
-  fileInput.hidden = true;
-  const uploadBtn = document.createElement('button');
-  uploadBtn.className = 'menu-secondary';
-  uploadBtn.textContent = 'ENVIAR FOTO';
-  images.append(imageGrid, uploadBtn, fileInput);
+  const galleryBtn = document.createElement('button');
+  galleryBtn.className = 'menu-secondary';
+  galleryBtn.textContent = 'GALERIA DE IMAGENS';
+  images.append(imageGrid, galleryBtn);
 
   const retro = section('MODO RETRÔ');
   const retroGrid = grid('toggle');
@@ -174,16 +169,12 @@ export function createMenu(
     dice.textContent = '?';
     random.prepend(dice);
     colorGrid.replaceChildren(random, ...PALETTES.map((p) => swatch(p, p.id === s.palette)));
-    const opts: Array<{ id: string; name: string; url: string | null }> = [
-      { id: 'random', name: 'SORTEAR', url: null },
-      { id: 'none', name: 'NÚMEROS', url: null },
-      ...ORIGINAL_IMAGES.map((i) => ({ id: i.id, name: i.name, url: originalImageUrl(i.id) })),
-      ...BUILTIN_IMAGES.map((i) => ({ id: i.id, name: i.name, url: builtinImageUrl(i.id) })),
-      ...FILE_IMAGES,
+    const opts: Array<{ id: string; name: string; url: string | null; pixelated: boolean }> = [
+      { id: 'random', name: 'SORTEAR', url: null, pixelated: false },
+      { id: 'none', name: 'NÚMEROS', url: null, pixelated: false },
+      ...s.images.map((i) => ({ id: i.id, name: i.title, url: i.thumb, pixelated: i.pixelated })),
     ];
-    if (s.photo) opts.push({ id: 'user', name: 'SUA FOTO', url: s.photo });
-    imageGrid.replaceChildren(...opts.map((o) => picture(o.id, o.name, o.url, o.id === s.image)));
-    uploadBtn.textContent = s.photo ? 'TROCAR FOTO' : 'ENVIAR FOTO';
+    imageGrid.replaceChildren(...opts.map((o) => picture(o.id, o.name, o.url, o.id === s.image, o.pixelated)));
     retroGrid.replaceChildren(
       ...[true, false].map((on) => {
         const b = option(on ? 'LIGADO' : 'DESLIGADO', on === s.retro);
@@ -248,7 +239,7 @@ export function createMenu(
     return b;
   }
 
-  function picture(id: string, name: string, url: string | null, selected: boolean): HTMLButtonElement {
+  function picture(id: string, name: string, url: string | null, selected: boolean, pixelated: boolean): HTMLButtonElement {
     const b = option(name, selected);
     b.dataset.image = id;
     const thumb = document.createElement('span');
@@ -258,7 +249,7 @@ export function createMenu(
       thumb.textContent = '?';
     } else if (url) {
       thumb.style.backgroundImage = `url("${url}")`;
-      if (id !== 'user' && !id.startsWith('file:')) thumb.classList.add('pixelated');
+      if (pixelated) thumb.classList.add('pixelated');
     } else {
       thumb.textContent = '123';
     }
@@ -322,20 +313,9 @@ export function createMenu(
     h.vibration(b.dataset.vibration === 'true');
     render();
   });
-  uploadBtn.addEventListener('click', () => fileInput.click());
-  fileInput.addEventListener('change', async () => {
-    const file = fileInput.files?.[0];
-    fileInput.value = '';
-    if (!file) return;
-    uploadBtn.disabled = true;
-    try {
-      await h.photo(file);
-    } catch {
-      alert('NÃO DEU PARA ABRIR ESSA IMAGEM.');
-    } finally {
-      uploadBtn.disabled = false;
-      render();
-    }
+  galleryBtn.addEventListener('click', () => {
+    dlg.close();
+    h.gallery();
   });
   newGameBtn.addEventListener('click', () => {
     dlg.close();

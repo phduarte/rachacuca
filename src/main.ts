@@ -13,16 +13,15 @@ import { db, type GameRecord, type SavedSession } from './data/db';
 import { clearSession, loadSession, SAVE_DEBOUNCE_MS, saveSession, saveSessionPatchSync } from './data/session';
 import { confirmDialog } from './ui/confirm';
 import { recordGame, type RecordOutcome } from './data/stats';
-import { legacyPhoto, loadUserPhoto, migrateLegacyPhoto, saveUserPhoto } from './data/images';
+import { catalog, enabledIds, findImage, loadCatalog, onCatalogChange, registerTemporary, userEntry } from './data/images';
+import { createGalleryScreen } from './ui/gallery';
 import { installHintShown, loadRecent, markInstallHintShown, saveRecent, type Recent } from './data/meta';
 import { createRotateHint, keepAwake, LANDSCAPE_PHONE, setupBackButton, setupFullscreen } from './pwa/fullscreen';
 import { applyPalette, paletteById, PALETTES } from './theme/palettes';
-import { BUILTIN_IMAGES, builtinImageUrl, FILE_IMAGES, fileImageUrl, photoFromFile } from './theme/images';
-import { ORIGINAL_IMAGES } from './theme/originals';
+import { fileImageUrl } from './theme/images';
 import { pickFresh, RECENT_IMAGES, RECENT_PALETTES, remember } from './theme/draw';
 import { glitch, setCrt, tubeTransition } from './render/crt';
-import { originalImageUrl } from './theme/originals';
-import { forgetRetro, RETRO_GRID, retroize } from './theme/retroize';
+import { retroize } from './theme/retroize';
 import { loadSettings, saveSettings, showNumbers } from './settings';
 import { createBrand } from './ui/brand';
 import { createMenu, createMenuButton } from './ui/menu';
@@ -59,8 +58,6 @@ hud.append(timeStat.el, movesStat.el);
 
 const view = new BoardView();
 const settings = loadSettings();
-/** URL da foto do jogador (object URL do IndexedDB), carregada na abertura. */
-let photo: string | null = null;
 /** Paletas e imagens recentes (store meta), carregadas na abertura. */
 let recent: Recent = { palettes: [], images: [] };
 const status = document.createElement('div');
@@ -97,12 +94,17 @@ barNewGame.textContent = 'NOVO JOGO';
 bottomBar.append(peekBtn, thumb, barNewGame);
 
 /** Telas (seção 10.2): abertura, menu principal e jogo. */
-type Screen = 'title' | 'menu' | 'game' | 'stats';
+type Screen = 'title' | 'menu' | 'game' | 'stats' | 'gallery';
 let screen: Screen = 'title';
 
 /** Versão nova pronta (seção 9.4): aplicar recarrega o app. */
 let applyUpdate: (() => void) | null = null;
-const menuState = () => ({ ...settings, photo, install: installMode(), update: !!applyUpdate });
+const menuState = () => ({
+  ...settings,
+  images: catalog().map(({ id, title, thumb, pixelated }) => ({ id, title, thumb, pixelated })),
+  install: installMode(),
+  update: !!applyUpdate,
+});
 const installHint = createInstallHint();
 const menu = createMenu(menuState, {
   size(n) {
@@ -146,17 +148,7 @@ const menu = createMenu(menuState, {
     gameImage = id;
     applyImage();
   },
-  async photo(file) {
-    const blob = await photoFromFile(file);
-    if (photo?.startsWith('blob:')) URL.revokeObjectURL(photo);
-    photo = URL.createObjectURL(blob);
-    forgetRetro('user');
-    if (!(await saveUserPhoto(blob, 512))) alert('A FOTO VALE SÓ ATÉ FECHAR O JOGO: FALTOU ESPAÇO.');
-    settings.image = 'user';
-    gameImage = 'user';
-    saveSettings(settings);
-    applyImage();
-  },
+  gallery: () => go('gallery'),
   volume(level) {
     settings.volume = level;
     saveSettings(settings);
@@ -239,11 +231,7 @@ const mainMenu = createMainMenu(
       settings.size = n;
       saveSettings(settings);
     },
-    images() {
-      menu.open();
-      menu.el.querySelector('.option-grid--pictures')?.closest('section')?.scrollIntoView();
-      armBack();
-    },
+    images: () => go('gallery'),
     stats: () => go('stats'),
     options() {
       menu.open();
@@ -260,9 +248,13 @@ mainMenu.el.addEventListener('click', (e) => {
 const statsScreen = createStatsScreen({
   back: () => go('menu'),
   replay: (g) => go('game', () => newGame({ seed: g.seed, size: g.size, image: g.imageId, palette: g.paletteId })),
-  thumb: (id) =>
-    originalImageUrl(id) ?? builtinImageUrl(id) ?? FILE_IMAGES.find((i) => i.id === id)?.url ?? (id === 'user' ? photo : null),
+  thumb: (id) => findImage(id)?.thumb ?? null,
 });
+const galleryScreen = createGalleryScreen({ back: () => go('menu') });
+galleryScreen.el.addEventListener('click', (e) => {
+  if ((e.target as HTMLElement).closest('button')) sfx.beep();
+});
+onCatalogChange(() => menu.refresh());
 statsScreen.el.addEventListener('click', (e) => {
   if ((e.target as HTMLElement).closest('button')) sfx.beep();
 });
@@ -275,6 +267,8 @@ function go(to: Screen, after?: () => void): void {
     titleScreen.hidden = to !== 'title';
     mainMenu.el.hidden = to !== 'menu';
     statsScreen.el.hidden = to !== 'stats';
+    galleryScreen.el.hidden = to !== 'gallery';
+    if (to === 'gallery') galleryScreen.show();
     if (to === 'stats') statsScreen.show(settings.size);
     if (to === 'menu') mainMenu.render();
     after?.();
@@ -310,7 +304,7 @@ function startGame(): void {
   else go('game', () => newGame());
 }
 app.dataset.screen = screen;
-app.append(titleScreen, mainMenu.el, statsScreen.el, topBar, display, view.el, bottomBar, pauseScreen.el, menu.el, installHint.el, victory.canvas, createRotateHint());
+app.append(titleScreen, mainMenu.el, statsScreen.el, galleryScreen.el, topBar, display, view.el, bottomBar, pauseScreen.el, menu.el, installHint.el, victory.canvas, createRotateHint());
 setupFullscreen();
 /** Conta os pedidos de imagem para ignorar recortes que chegam atrasados. */
 let imageRequest = 0;
@@ -321,12 +315,8 @@ let gameImage = settings.image === 'random' ? 'none' : settings.image;
 
 /** Todas as imagens que entram no sorteio (seção 3.2). */
 function imageIds(): string[] {
-  return [
-    ...ORIGINAL_IMAGES.map((i) => i.id),
-    ...BUILTIN_IMAGES.map((i) => i.id),
-    ...FILE_IMAGES.map((i) => i.id),
-    ...(photo ? ['user'] : []),
-  ];
+  const ids = enabledIds();
+  return ids.length ? ids : ['none'];
 }
 
 /** Seção 3: sorteia paleta e imagem sem repetir as recentes (ou usa as fixadas). */
@@ -379,15 +369,15 @@ interface SourceImage {
 
 /** A imagem escolhida em cores originais (null = só números). */
 async function sourceImage(): Promise<SourceImage | null> {
-  if (gameImage === 'user') return photo ? { url: photo, pixelated: false, grid: RETRO_GRID } : null;
-  const original = originalImageUrl(gameImage);
-  if (original) return { url: original, pixelated: true, grid: RETRO_GRID };
-  const builtin = builtinImageUrl(gameImage);
-  if (builtin) return { url: builtin, pixelated: true, grid: 64 };
+  const img = findImage(gameImage);
+  if (!img) return null;
+  // As da pasta assets/images são recortadas em quadrado na hora.
   const file = fileImageUrl(gameImage);
-  if (!file) return null;
-  const { url, pixelated } = await file;
-  return { url, pixelated, grid: RETRO_GRID };
+  if (file) {
+    const { url, pixelated } = await file;
+    return { url, pixelated, grid: img.grid };
+  }
+  return { url: img.url, pixelated: img.pixelated, grid: img.grid };
 }
 
 /**
@@ -475,13 +465,9 @@ async function saveNow(): Promise<void> {
   clearTimeout(saveTimer);
   if (!inProgress()) return;
   const id = gameId;
-  if (gameImage === 'user' && photo && imageCopy?.gameId !== id) {
-    try {
-      imageCopy = { gameId: id, blob: await (await fetch(photo)).blob() };
-    } catch {
-      imageCopy = null;
-    }
-  }
+  // Imagem do jogador: vai uma cópia junto, para a partida seguir se ela for apagada.
+  const own = userEntry(gameImage);
+  if (own?.blob && imageCopy?.gameId !== id) imageCopy = { gameId: id, blob: own.blob };
   const { status: _s, finishedAt: _f, ...game } = gameRecord('abandoned');
   await saveSession({
     game,
@@ -767,9 +753,9 @@ function restoreSession(s: SavedSession): void {
   gamePalette = g.paletteId;
   gameImage = g.imageId;
   // A foto do jogador sumiu ou mudou: a partida segue com a cópia salva.
-  if (g.imageId === 'user' && s.imageCopy) {
+  if (s.imageCopy) {
     imageCopy = { gameId, blob: s.imageCopy };
-    if (!photo) photo = URL.createObjectURL(s.imageCopy);
+    if (!findImage(g.imageId)) registerTemporary(g.imageId, s.imageCopy);
   }
   won = false;
   starting = false;
@@ -830,11 +816,12 @@ const armBack = setupBackButton(
     !!openDialog() ||
     (screen === 'game' && !won && !starting && !paused) ||
     (screen === 'menu' && gameId > 0 && !won) ||
-    screen === 'stats',
+    screen === 'stats' ||
+    screen === 'gallery',
   () => {
     const dlg = openDialog();
     if (dlg) dlg.close();
-    else if (screen === 'stats') go('menu');
+    else if (screen === 'stats' || screen === 'gallery') go('menu');
     else if (screen === 'menu') go('game');
     else pause();
   },
@@ -928,9 +915,7 @@ setupInstall(() => menu.refresh());
 
 /** Dados do aparelho (seção 11.3): migra a versão anterior e carrega o que o jogo usa. */
 async function loadData(): Promise<void> {
-  await migrateLegacyPhoto();
-  const blob = await loadUserPhoto();
-  photo = blob ? URL.createObjectURL(blob) : legacyPhoto();
+  await loadCatalog();
   recent = await loadRecent();
   savedSession = await loadSession();
   mainMenu.render();

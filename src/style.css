@@ -1575,3 +1575,88 @@ button:focus-visible {
 .stats-detail-list dd {
   margin: 0;
 }
+
+/* Galeria de imagens (seção 4.2) */
+.gallery-screen {
+  justify-content: flex-start;
+  gap: 16px;
+}
+
+.gallery-counter,
+.gallery-message,
+.gallery-add,
+.gallery-grid,
+.gallery-filters,
+.gallery-backup {
+  width: min(100%, 560px);
+}
+
+.gallery-counter,
+.gallery-message {
+  margin: 0;
+  font-size: 8px;
+  line-height: 1.6;
+}
+
+.gallery-message:empty {
+  display: none;
+}
+
+.gallery-message {
+  color: color-mix(in srgb, var(--accent), #fff 30%);
+}
+
+.gallery-add {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.gallery-add button {
+  font-size: 8px;
+}
+
+.gallery-grid {
+  margin: 0;
+  padding: 0 0 16px;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 10px;
+}
+
+.gallery-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  background: color-mix(in srgb, var(--bg), #fff 6%);
+  border: 3px solid transparent;
+}
+
+.gallery-card--off .gallery-thumb {
+  opacity: 0.3;
+  filter: grayscale(1);
+}
+
+.gallery-thumb {
+  aspect-ratio: 1;
+  background: center / cover no-repeat;
+}
+
+.gallery-name {
+  font-size: 8px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.gallery-badge {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  padding: 3px 4px;
+  font-size: 8px;
+  color: var(--bg);
+  background: var(--ui-text);
+}
