@@ -81,7 +81,21 @@ export function createGalleryScreen(h: GalleryHandlers): { el: HTMLDivElement; s
   }
 
   const grid = el('ul', 'gallery-grid');
-  root.append(head, counter, addRow, message, filters, grid);
+
+  // Backup das imagens do jogador em .zip (seção 4.2).
+  const backup = el('section', 'gallery-backup');
+  backup.append(el('h3', undefined, 'BACKUP DAS SUAS IMAGENS'));
+  const backupRow = el('div', 'gallery-add');
+  const exportBtn = el('button', 'pause-option', 'EXPORTAR .ZIP');
+  const importBtn = el('button', 'pause-option', 'IMPORTAR .ZIP');
+  const zipInput = el('input');
+  zipInput.type = 'file';
+  zipInput.accept = '.zip,application/zip';
+  zipInput.hidden = true;
+  backupRow.append(exportBtn, importBtn, zipInput);
+  backup.append(backupRow);
+
+  root.append(head, counter, addRow, message, filters, grid, backup);
 
   function card(img: CatalogImage): HTMLLIElement {
     const li = el('li');
@@ -211,6 +225,35 @@ export function createGalleryScreen(h: GalleryHandlers): { el: HTMLDivElement; s
   grid.addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-id]');
     if (b) details(b.dataset.id!);
+  });
+  exportBtn.addEventListener('click', async () => {
+    if (!userCount()) {
+      message.textContent = 'VOCÊ AINDA NÃO TEM IMAGENS PARA EXPORTAR.';
+      return;
+    }
+    message.textContent = 'GERANDO O .ZIP...';
+    const { exportBackup } = await import('../data/backup');
+    const url = URL.createObjectURL(await exportBackup());
+    const a = el('a');
+    a.href = url;
+    a.download = `racha-cuca-imagens-${new Date().toISOString().slice(0, 10)}.zip`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    message.textContent = `${userCount()} IMAGENS EXPORTADAS.`;
+  });
+  importBtn.addEventListener('click', () => zipInput.click());
+  zipInput.addEventListener('change', async () => {
+    const file = zipInput.files?.[0];
+    zipInput.value = '';
+    if (!file) return;
+    message.textContent = 'LENDO O BACKUP...';
+    try {
+      const { importBackup } = await import('../data/backup');
+      const { added, skipped } = await importBackup(file);
+      message.textContent = `${added} IMPORTADAS${skipped ? `, ${skipped} JÁ EXISTIAM` : ''}.`;
+    } catch (e) {
+      message.textContent = e instanceof ImageRuleError ? e.message : 'NÃO DEU PARA LER O BACKUP.';
+    }
   });
   pickBtn.addEventListener('click', () => pick.click());
   cameraBtn.addEventListener('click', () => camera.click());
