@@ -9,7 +9,8 @@ import * as sfx from './audio/sfx';
 import { holdMusic, setMusic } from './audio/music';
 import { setupServiceWorker } from './pwa/sw';
 import { installMode, promptInstall, setupInstall } from './pwa/install';
-import { db } from './data/db';
+import { db, type GameRecord } from './data/db';
+import { recordGame, type RecordOutcome } from './data/stats';
 import { legacyPhoto, loadUserPhoto, migrateLegacyPhoto, saveUserPhoto } from './data/images';
 import { installHintShown, loadRecent, markInstallHintShown, saveRecent, type Recent } from './data/meta';
 import { createRotateHint, keepAwake, LANDSCAPE_PHONE, setupBackButton, setupFullscreen } from './pwa/fullscreen';
@@ -389,6 +390,34 @@ let seed = 0;
 let gameId = 0;
 /** Espiadas na partida (seção 3.2): entram no resultado e nas estatísticas. */
 let peeks = 0;
+/** Registro da partida (seção 11.3): id, início e posição inicial. */
+let recordId = '';
+let startedAt = 0;
+let initialTiles: number[] = [];
+/** Resultado da gravação da última vitória (recorde novo etc.), para o painel. */
+let lastOutcome: Promise<RecordOutcome> | null = null;
+
+function gameRecord(status: GameRecord['status']): GameRecord {
+  return {
+    id: recordId,
+    size,
+    seed,
+    imageId: gameImage,
+    paletteId: gamePalette,
+    initialTiles,
+    status,
+    moves,
+    timeMs: Math.round(timer.elapsedMs()),
+    peeks,
+    startedAt,
+    finishedAt: Date.now(),
+  };
+}
+
+/** Partida mexida e não terminada: sair dela para outra conta como abandono (seção 2.5). */
+function inProgress(): boolean {
+  return gameId > 0 && !won && moves > 0;
+}
 const timer = new Timer();
 
 const COUNTDOWN_FROM = 3;
@@ -439,6 +468,7 @@ for (const [word, mod] of [
  * REINICIAR passa a mesma semente e mantém paleta e imagem.
  */
 function newGame(gameSeed?: number): void {
+  if (inProgress()) void recordGame(gameRecord('abandoned'));
   const id = ++gameId;
   size = settings.size;
   if (gameSeed === undefined) {
@@ -448,6 +478,9 @@ function newGame(gameSeed?: number): void {
   applyTheme();
   seed = gameSeed;
   const shuffled = shuffle(size, seed);
+  recordId = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  startedAt = Date.now();
+  initialTiles = [...shuffled.tiles];
   paused = false;
   pauseScreen.hide();
   board = createBoard(size);
@@ -533,6 +566,11 @@ function apply(result: MoveResult): void {
     queue.length = 0;
     renderHud();
     syncAwake();
+    lastOutcome = recordGame(gameRecord('won'));
+    const outcomeOf = lastOutcome;
+    void outcomeOf.then((o) => {
+      if (lastOutcome === outcomeOf && (o.newBestTime || o.newBestMoves)) status.textContent = 'NOVO RECORDE!';
+    });
   }
   sliding = true;
   const id = gameId;
