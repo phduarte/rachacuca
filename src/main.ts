@@ -30,6 +30,7 @@ import { createPauseButton, createPauseScreen } from './ui/pause';
 import { createInstallHint } from './ui/installHint';
 import { createTitleScreen } from './ui/title';
 import { createMainMenu } from './ui/mainMenu';
+import { createStatsScreen } from './ui/stats';
 
 // Bloqueios da seção 9.2 (menu de toque longo e pinça do iOS).
 document.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -96,7 +97,7 @@ barNewGame.textContent = 'NOVO JOGO';
 bottomBar.append(peekBtn, thumb, barNewGame);
 
 /** Telas (seção 10.2): abertura, menu principal e jogo. */
-type Screen = 'title' | 'menu' | 'game';
+type Screen = 'title' | 'menu' | 'game' | 'stats';
 let screen: Screen = 'title';
 
 /** Versão nova pronta (seção 9.4): aplicar recarrega o app. */
@@ -209,7 +210,7 @@ victory.vibration = settings.vibration;
 let stopVictorySound = (): void => {};
 const pauseScreen = createPauseScreen({
   resume: () => resume(),
-  restart: () => newGame(seed),
+  restart: () => newGame({ seed }),
   menu: () => go('menu'),
 });
 
@@ -229,7 +230,7 @@ const mainMenu = createMainMenu(
     unlocked6: settings.unlocked6,
     install: !!installMode(),
     update: !!applyUpdate,
-    stats: false,
+    stats: true,
   }),
   {
     continue: () => continueGame(),
@@ -243,7 +244,7 @@ const mainMenu = createMainMenu(
       menu.el.querySelector('.option-grid--pictures')?.closest('section')?.scrollIntoView();
       armBack();
     },
-    stats() {},
+    stats: () => go('stats'),
     options() {
       menu.open();
       armBack();
@@ -256,6 +257,16 @@ mainMenu.el.addEventListener('click', (e) => {
   if ((e.target as HTMLElement).closest('button')) sfx.beep();
 });
 
+const statsScreen = createStatsScreen({
+  back: () => go('menu'),
+  replay: (g) => go('game', () => newGame({ seed: g.seed, size: g.size, image: g.imageId, palette: g.paletteId })),
+  thumb: (id) =>
+    originalImageUrl(id) ?? builtinImageUrl(id) ?? FILE_IMAGES.find((i) => i.id === id)?.url ?? (id === 'user' ? photo : null),
+});
+statsScreen.el.addEventListener('click', (e) => {
+  if ((e.target as HTMLElement).closest('button')) sfx.beep();
+});
+
 /** Troca de tela com a transição do tubo (seção 10.2). */
 function go(to: Screen, after?: () => void): void {
   tubeTransition(() => {
@@ -263,6 +274,8 @@ function go(to: Screen, after?: () => void): void {
     app.dataset.screen = to;
     titleScreen.hidden = to !== 'title';
     mainMenu.el.hidden = to !== 'menu';
+    statsScreen.el.hidden = to !== 'stats';
+    if (to === 'stats') statsScreen.show(settings.size);
     if (to === 'menu') mainMenu.render();
     after?.();
     syncAwake();
@@ -297,7 +310,7 @@ function startGame(): void {
   else go('game', () => newGame());
 }
 app.dataset.screen = screen;
-app.append(titleScreen, mainMenu.el, topBar, display, view.el, bottomBar, pauseScreen.el, menu.el, installHint.el, victory.canvas, createRotateHint());
+app.append(titleScreen, mainMenu.el, statsScreen.el, topBar, display, view.el, bottomBar, pauseScreen.el, menu.el, installHint.el, victory.canvas, createRotateHint());
 setupFullscreen();
 /** Conta os pedidos de imagem para ignorar recortes que chegam atrasados. */
 let imageRequest = 0;
@@ -531,17 +544,31 @@ for (const [word, mod] of [
  * Partida nova (seção 3): sorteia paleta, imagem e embaralhamento.
  * REINICIAR passa a mesma semente e mantém paleta e imagem.
  */
-function newGame(gameSeed?: number): void {
+interface Replay {
+  seed: number;
+  /** Jogar de novo uma partida do histórico: também tamanho, imagem e paleta. */
+  size?: Size;
+  image?: string;
+  palette?: string;
+}
+
+function newGame(replay?: Replay): void {
   if (inProgress()) void recordGame(gameRecord('abandoned'));
   clearTimeout(saveTimer);
   void clearSession();
   savedSession = null;
   const id = ++gameId;
-  // REINICIAR (mesma semente) mantém o tamanho da partida.
-  if (gameSeed === undefined) size = settings.size;
-  if (gameSeed === undefined) {
+  let gameSeed: number;
+  if (!replay) {
+    size = settings.size;
     gameSeed = newSeed();
     chooseTheme();
+  } else {
+    // REINICIAR mantém tamanho, imagem e paleta; JOGAR DE NOVO traz os da partida.
+    gameSeed = replay.seed;
+    if (replay.size) size = replay.size;
+    if (replay.image) gameImage = replay.image;
+    if (replay.palette) gamePalette = replay.palette;
   }
   applyTheme();
   seed = gameSeed;
@@ -802,10 +829,12 @@ const armBack = setupBackButton(
   () =>
     !!openDialog() ||
     (screen === 'game' && !won && !starting && !paused) ||
-    (screen === 'menu' && gameId > 0 && !won),
+    (screen === 'menu' && gameId > 0 && !won) ||
+    screen === 'stats',
   () => {
     const dlg = openDialog();
     if (dlg) dlg.close();
+    else if (screen === 'stats') go('menu');
     else if (screen === 'menu') go('game');
     else pause();
   },
