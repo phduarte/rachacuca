@@ -250,7 +250,7 @@ const statsScreen = createStatsScreen({
   replay: (g) => go('game', () => newGame({ seed: g.seed, size: g.size, image: g.imageId, palette: g.paletteId })),
   thumb: (id) => findImage(id)?.thumb ?? null,
 });
-const galleryScreen = createGalleryScreen({ back: () => go('menu') });
+const galleryScreen = createGalleryScreen({ back: () => go('menu'), palette: () => paletteById(gamePalette) });
 galleryScreen.el.addEventListener('click', (e) => {
   if ((e.target as HTMLElement).closest('button')) sfx.beep();
 });

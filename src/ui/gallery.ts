@@ -3,9 +3,13 @@
  * e as do jogador, e importação da galeria do aparelho ou da câmera.
  */
 import { catalog, importFile, ImageRuleError, onCatalogChange, userCount, type CatalogImage } from '../data/images';
+import type { Palette } from '../theme/palettes';
+import { cropImage } from './crop';
 
 export interface GalleryHandlers {
   back(): void;
+  /** Paleta atual, para a prévia retrô do recorte. */
+  palette(): Palette;
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
@@ -73,9 +77,13 @@ export function createGalleryScreen(h: GalleryHandlers): { el: HTMLDivElement; s
     if (!files?.length) return;
     let ok = 0;
     message.textContent = 'IMPORTANDO...';
-    for (const file of files) {
+    for (const file of [...files]) {
       try {
-        await importFile(file);
+        // Cada imagem passa pela tela de recorte; cancelar pula a imagem.
+        const crop = await cropImage(file, h.palette());
+        if (!crop) continue;
+        message.textContent = 'IMPORTANDO...';
+        await importFile(file, crop);
         ok++;
       } catch (e) {
         message.textContent = e instanceof ImageRuleError ? e.message : `NÃO DEU PARA ABRIR ${file.name.toUpperCase()}.`;
@@ -83,6 +91,7 @@ export function createGalleryScreen(h: GalleryHandlers): { el: HTMLDivElement; s
       }
     }
     if (ok) message.textContent = ok === 1 ? '1 IMAGEM IMPORTADA.' : `${ok} IMAGENS IMPORTADAS.`;
+    else if (message.textContent === 'IMPORTANDO...') message.textContent = '';
   }
 
   pickBtn.addEventListener('click', () => pick.click());

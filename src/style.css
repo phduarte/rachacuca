@@ -1660,3 +1660,100 @@ button:focus-visible {
   color: var(--bg);
   background: var(--ui-text);
 }
+
+/* Recorte quadrado (seção 4.2) */
+.crop {
+  width: 100vw;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 16px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: var(--ui-text);
+  background: var(--bg);
+  border: 0;
+  font-family: var(--font);
+}
+
+.crop:not([open]) {
+  display: none;
+}
+
+.crop h2 {
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: 2px;
+}
+
+.crop-hint {
+  margin: 0;
+  font-size: 8px;
+  opacity: 0.7;
+  text-align: center;
+}
+
+.crop-stage {
+  position: relative;
+  width: min(100vw - 32px, 100dvh - 260px, 560px);
+  aspect-ratio: 1;
+  touch-action: none;
+  cursor: grab;
+  border: 3px solid var(--ui-text);
+  box-shadow: 0 0 0 9999px rgb(0 0 0 / 0.35);
+}
+
+/* Terços, para ajudar a enquadrar */
+.crop-stage::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent calc(33.33% - 1px), rgb(255 255 255 / 0.4) 0 calc(33.33% + 1px), transparent 0 calc(66.66% - 1px), rgb(255 255 255 / 0.4) 0 calc(66.66% + 1px), transparent 0),
+    linear-gradient(transparent calc(33.33% - 1px), rgb(255 255 255 / 0.4) 0 calc(33.33% + 1px), transparent 0 calc(66.66% - 1px), rgb(255 255 255 / 0.4) 0 calc(66.66% + 1px), transparent 0);
+}
+
+.crop-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.crop-actions {
+  width: min(100vw - 32px, 560px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.crop-cancel,
+.crop-ok {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.crop-ok {
+  padding: 0 16px;
+  font-size: 16px;
+}
+
+.crop-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 8px;
+  opacity: 0.85;
+}
+
+.crop-preview canvas {
+  width: 64px;
+  height: 64px;
+  image-rendering: pixelated;
+  border: 2px solid var(--bezel);
+}
