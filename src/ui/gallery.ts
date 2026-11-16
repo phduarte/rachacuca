@@ -2,7 +2,19 @@
  * Galeria de imagens (seção 4.2): grade de miniaturas com as imagens do jogo
  * e as do jogador, e importação da galeria do aparelho ou da câmera.
  */
-import { catalog, importFile, ImageRuleError, onCatalogChange, userCount, type CatalogImage } from '../data/images';
+import {
+  catalog,
+  deleteImage,
+  findImage,
+  importFile,
+  ImageRuleError,
+  onCatalogChange,
+  renameImage,
+  setEnabled,
+  userCount,
+  type CatalogImage,
+} from '../data/images';
+import { confirmDialog } from './confirm';
 import type { Palette } from '../theme/palettes';
 import { cropImage } from './crop';
 
@@ -52,17 +64,37 @@ export function createGalleryScreen(h: GalleryHandlers): { el: HTMLDivElement; s
   const cameraBtn = el('button', 'pause-option', 'TIRAR FOTO');
   addRow.append(pickBtn, cameraBtn, pick, camera);
 
+  // Filtro: Todas / Originais / Minhas (seção 4.2).
+  type Filter = 'all' | 'original' | 'user';
+  let filter: Filter = 'all';
+  const filters = el('div', 'gallery-filters stats-tabs');
+  filters.setAttribute('role', 'tablist');
+  for (const [key, label] of [
+    ['all', 'TODAS'],
+    ['original', 'ORIGINAIS'],
+    ['user', 'MINHAS'],
+  ] as const) {
+    const b = el('button', 'stats-tab', label);
+    b.setAttribute('role', 'tab');
+    b.dataset.filter = key;
+    filters.append(b);
+  }
+
   const grid = el('ul', 'gallery-grid');
-  root.append(head, counter, addRow, message, grid);
+  root.append(head, counter, addRow, message, filters, grid);
 
   function card(img: CatalogImage): HTMLLIElement {
-    const li = el('li', img.enabled ? 'gallery-card' : 'gallery-card gallery-card--off');
-    li.dataset.id = img.id;
+    const li = el('li');
+    const b = el('button', img.enabled ? 'gallery-card' : 'gallery-card gallery-card--off');
+    b.dataset.id = img.id;
+    b.setAttribute('aria-label', `${img.title}${img.source === 'original' ? ', original' : ''}, ${img.enabled ? 'ativa' : 'desligada'}`);
     const thumb = el('span', img.pixelated ? 'gallery-thumb pixelated' : 'gallery-thumb');
     thumb.style.backgroundImage = `url("${img.thumb}")`;
     const name = el('span', 'gallery-name', img.title);
-    li.append(thumb, name);
-    if (img.source === 'original') li.append(el('span', 'gallery-badge', 'ORIGINAL'));
+    b.append(thumb, name);
+    if (img.source === 'original') b.append(el('span', 'gallery-badge', 'ORIGINAL'));
+    if (!img.enabled) b.append(el('span', 'gallery-off', 'DESLIGADA'));
+    li.append(b);
     return li;
   }
 
@@ -70,7 +102,83 @@ export function createGalleryScreen(h: GalleryHandlers): { el: HTMLDivElement; s
     const all = catalog();
     const active = all.filter((i) => i.enabled).length;
     counter.textContent = `${all.length - userCount()} + ${userCount()} IMAGENS · ${active} ATIVAS`;
-    grid.replaceChildren(...all.map(card));
+    for (const f of filters.querySelectorAll<HTMLButtonElement>('[data-filter]')) {
+      f.setAttribute('aria-selected', String(f.dataset.filter === filter));
+    }
+    const shown = all.filter((i) => filter === 'all' || i.source === filter);
+    grid.replaceChildren(...shown.map(card));
+    if (!shown.length) grid.append(el('li', 'stats-empty', 'NENHUMA IMAGEM SUA AINDA. IMPORTE ACIMA.'));
+  }
+
+  /** Painel de uma imagem: renomear (só as suas), ligar/desligar e apagar (só as suas). */
+  function details(id: string): void {
+    const img = findImage(id);
+    if (!img) return;
+    const dlg = el('dialog', 'menu gallery-detail');
+    const headEl = el('header', 'menu-head');
+    headEl.append(el('h2', undefined, img.source === 'original' ? 'ORIGINAL' : 'SUA IMAGEM'));
+    const close = el('button', 'icon-btn close-btn');
+    close.setAttribute('aria-label', 'Fechar');
+    close.innerHTML = '<span></span><span></span>';
+    headEl.append(close);
+    const body = el('div', 'menu-body');
+    const big = el('span', img.pixelated ? 'gallery-detail-img pixelated' : 'gallery-detail-img');
+    big.style.backgroundImage = `url("${img.url}")`;
+    body.append(big);
+
+    const note = el('p', 'gallery-message');
+    note.setAttribute('role', 'status');
+
+    let nameInput: HTMLInputElement | null = null;
+    if (img.source === 'user') {
+      const label = el('label', 'gallery-rename');
+      label.append(el('span', undefined, 'NOME'));
+      nameInput = el('input');
+      nameInput.value = img.title;
+      nameInput.maxLength = 24;
+      nameInput.autocomplete = 'off';
+      label.append(nameInput);
+      body.append(label);
+    } else {
+      body.append(el('p', 'gallery-counter', `${img.title} · VEM COM O JOGO E NÃO PODE SER APAGADA.`));
+    }
+
+    const toggle = el('button', 'pause-option', img.enabled ? 'DESLIGAR DA ROTAÇÃO' : 'LIGAR NA ROTAÇÃO');
+    body.append(toggle);
+    let del: HTMLButtonElement | null = null;
+    if (img.source === 'user') {
+      del = el('button', 'pause-option gallery-delete', 'APAGAR');
+      body.append(del);
+    }
+    body.append(note);
+    dlg.append(headEl, body);
+
+    toggle.addEventListener('click', async () => {
+      try {
+        await setEnabled(id, !findImage(id)!.enabled);
+        dlg.close();
+      } catch (e) {
+        note.textContent = e instanceof ImageRuleError ? e.message : 'NÃO DEU CERTO.';
+      }
+    });
+    del?.addEventListener('click', async () => {
+      if (!(await confirmDialog('APAGAR ESTA IMAGEM?', img.title))) return;
+      try {
+        await deleteImage(id);
+        dlg.close();
+      } catch (e) {
+        note.textContent = e instanceof ImageRuleError ? e.message : 'NÃO DEU CERTO.';
+      }
+    });
+    close.addEventListener('click', () => dlg.close());
+    dlg.addEventListener('close', () => {
+      if (nameInput && nameInput.value.trim() && nameInput.value.trim().toUpperCase() !== img.title) {
+        void renameImage(id, nameInput.value);
+      }
+      dlg.remove();
+    });
+    document.body.append(dlg);
+    dlg.showModal();
   }
 
   async function importAll(files: FileList | null): Promise<void> {
@@ -94,6 +202,16 @@ export function createGalleryScreen(h: GalleryHandlers): { el: HTMLDivElement; s
     else if (message.textContent === 'IMPORTANDO...') message.textContent = '';
   }
 
+  filters.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-filter]');
+    if (!b) return;
+    filter = b.dataset.filter as Filter;
+    render();
+  });
+  grid.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-id]');
+    if (b) details(b.dataset.id!);
+  });
   pickBtn.addEventListener('click', () => pick.click());
   cameraBtn.addEventListener('click', () => camera.click());
   for (const input of [pick, camera]) {

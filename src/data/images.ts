@@ -52,6 +52,11 @@ function changed(): void {
   for (const fn of listeners) fn();
 }
 
+/** Imagem que vem com o jogo (não pode ser apagada, seção 4.2). */
+export function isOriginal(id: string): boolean {
+  return ORIGINAL_IMAGES.some((i) => i.id === id) || BUILTIN_IMAGES.some((i) => i.id === id) || FILE_IMAGES.some((i) => i.id === id);
+}
+
 function shippedImages(): CatalogImage[] {
   return [
     ...ORIGINAL_IMAGES.map((i) => {
@@ -174,11 +179,9 @@ export async function renameImage(id: string, title: string): Promise<void> {
  * é bloqueado.
  */
 export async function deleteImage(id: string): Promise<void> {
+  if (isOriginal(id)) throw new ImageRuleError('IMAGENS ORIGINAIS NÃO PODEM SER APAGADAS.');
   const u = user.get(id);
-  if (!u) {
-    if (findImage(id)?.source === 'original') throw new ImageRuleError('IMAGENS ORIGINAIS NÃO PODEM SER APAGADAS.');
-    return;
-  }
+  if (!u) return;
   if (u.enabled && enabledIds().length <= 1) throw new ImageRuleError('PELO MENOS 1 IMAGEM PRECISA FICAR ATIVA.');
   await (await db())?.delete('images', id);
   forget(id);
