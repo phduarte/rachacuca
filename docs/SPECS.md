@@ -105,7 +105,7 @@ Regras:
 ### 3.2 Imagem
 - Sorteada entre as imagens **ativas** do banco (originais + do usuário, seção 4).
 - Não repetir nenhuma das **5 últimas** (ou quantas houver, se o banco for menor).
-- **Modo retrô** (padrão ligado): a imagem é reduzida a uma grade de pixels (ex.: 128 × 128) e **quantizada para a paleta da partida** com dithering Floyd–Steinberg ou Bayer 4 × 4. Assim a mesma imagem fica diferente a cada paleta, e fotos do usuário ficam com cara de jogo antigo. Com o modo desligado, a imagem aparece em cores originais.
+- **Modo retrô** (opcional, padrão desligado): a imagem é reduzida a uma grade de pixels (ex.: 128 × 128) e **quantizada para a paleta da partida** com dithering Floyd–Steinberg ou Bayer 4 × 4. Assim a mesma imagem fica diferente a cada paleta, e fotos do usuário ficam com cara de jogo antigo. Com o modo desligado, a imagem aparece em cores originais.
 - Opção "mostrar números" (padrão: ligada no 5 × 5 e 6 × 6, desligada no 3 × 3 e 4 × 4). O número fica num canto da peça em fonte bitmap.
 - Botão "espiar" (segurar): mostra a imagem completa em transparência sobre o tabuleiro. Cada espiada conta nas estatísticas.
 
@@ -342,7 +342,7 @@ Abas por tamanho (3 × 3 / 4 × 4 / 5 × 5 / 6 × 6 / Todos).
 - **Fonte:** "Press Start 2P" (licença SIL OFL), hospedada junto com o app (sem Google Fonts em tempo de execução, por causa do offline). Tamanhos em múltiplos de 8 px.
 - **Renderização pixelada:** `image-rendering: pixelated` nas imagens e nas texturas das peças.
 - **Peças:** quadrados com chanfro 3D de 3 px (borda clara em cima/esquerda, escura embaixo/direita, cores da paleta) e um reflexo diagonal sutil (gradiente branco a 8%) para lembrar acrílico. Frestas de 2–3 px entre as peças (são o caminho da corrente na vitória).
-- **Efeito CRT (opcional, padrão ligado):** linhas de varredura (gradiente repetido de 2 px a 6% de opacidade), vinheta nas bordas e leve aberração cromática nos textos. Desligável nas configurações.
+- **Efeito CRT (opcional, padrão desligado):** linhas de varredura (gradiente repetido de 2 px a 6% de opacidade), vinheta nas bordas e leve aberração cromática nos textos. Ligável nas opções.
 
 ### 10.2 Telas
 

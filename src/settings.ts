@@ -1,5 +1,6 @@
 /**
- * Preferências do jogador (paleta, imagem, som, música e vibração), guardadas no aparelho.
+ * Preferências do jogador (opções pequenas), guardadas no localStorage.
+ * Dados maiores (fotos, histórico, partida salva) ficam no IndexedDB (src/data).
  * Tudo em try/catch: em aba anônima ou com armazenamento bloqueado o jogo
  * segue com os padrões.
  */
@@ -24,17 +25,29 @@ export interface Settings {
   retro: boolean;
   /** Efeito CRT: linhas de varredura, vinheta e aberração (seção 10.1). */
   crt: boolean;
+  /** Versão das preferências salvas, para migrar padrões que mudaram. */
+  v: number;
 }
 
+/**
+ * v2: modo retrô e efeito CRT passam a vir desligados (as imagens pixeladas
+ * não agradaram); quem tinha as preferências salvas antes também os desliga.
+ */
+const SETTINGS_VERSION = 2;
+
 const KEY = 'rachacuca:settings';
-const PHOTO_KEY = 'rachacuca:photo';
-const DEFAULTS: Settings = { palette: 'random', image: 'random', volume: 2, vibration: true, music: false, size: 4, unlocked6: false, numbers: 'auto', retro: true, crt: true };
+const DEFAULTS: Settings = { palette: 'random', image: 'random', volume: 2, vibration: true, music: false, size: 4, unlocked6: false, numbers: 'auto', retro: false, crt: false, v: SETTINGS_VERSION };
 
 export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const s = { ...DEFAULTS, ...(JSON.parse(raw) as Partial<Settings>) };
+      if (!(s.v >= SETTINGS_VERSION)) {
+        s.retro = false;
+        s.crt = false;
+        s.v = SETTINGS_VERSION;
+      }
       if (![3, 4, 5, 6].includes(s.size) || (s.size === 6 && !s.unlocked6)) s.size = DEFAULTS.size;
       return s;
     }
@@ -54,52 +67,5 @@ export function saveSettings(s: Settings): void {
     localStorage.setItem(KEY, JSON.stringify(s));
   } catch {
     /* sem armazenamento */
-  }
-}
-
-/** Paletas e imagens das últimas partidas, para o sorteio não repetir (seção 3). */
-export interface Recent {
-  palettes: string[];
-  images: string[];
-}
-
-const RECENT_KEY = 'rachacuca:recent';
-
-export function loadRecent(): Recent {
-  try {
-    const raw = localStorage.getItem(RECENT_KEY);
-    if (raw) {
-      const r = JSON.parse(raw) as Partial<Recent>;
-      return { palettes: r.palettes ?? [], images: r.images ?? [] };
-    }
-  } catch {
-    /* sem armazenamento */
-  }
-  return { palettes: [], images: [] };
-}
-
-export function saveRecent(r: Recent): void {
-  try {
-    localStorage.setItem(RECENT_KEY, JSON.stringify(r));
-  } catch {
-    /* sem armazenamento */
-  }
-}
-
-export function loadPhoto(): string | null {
-  try {
-    return localStorage.getItem(PHOTO_KEY);
-  } catch {
-    return null;
-  }
-}
-
-/** Devolve false se não couber no armazenamento (a foto vale só nesta sessão). */
-export function savePhoto(dataUrl: string): boolean {
-  try {
-    localStorage.setItem(PHOTO_KEY, dataUrl);
-    return true;
-  } catch {
-    return false;
   }
 }

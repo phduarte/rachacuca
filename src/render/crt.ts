@@ -9,7 +9,7 @@ const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 
 let layer: HTMLDivElement | null = null;
 
-/** Liga ou desliga a camada CRT (opção EFEITO CRT, padrão ligado). */
+/** Liga ou desliga a camada CRT (opção EFEITO CRT, padrão desligado). */
 export function setCrt(on: boolean): void {
   if (!layer) {
     layer = document.createElement('div');
