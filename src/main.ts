@@ -69,16 +69,22 @@ const display = document.createElement('section');
 display.className = 'display';
 display.append(hud, status);
 
-// Base da tela de jogo (seção 10.2): miniatura da imagem e novo jogo.
+// Base da tela de jogo (seção 10.2): espiar, miniatura da imagem e novo jogo.
 const bottomBar = document.createElement('footer');
 bottomBar.className = 'bottom-bar';
+const peekBtn = document.createElement('button');
+peekBtn.className = 'icon-btn peek-btn';
+peekBtn.setAttribute('aria-label', 'Espiar a imagem completa (segure)');
+// Olho em pixel art
+peekBtn.innerHTML = `<svg viewBox="0 0 11 7" width="26" height="17" shape-rendering="crispEdges" aria-hidden="true">
+  <path fill="currentColor" d="M3 0h5v1h2v1h1v3h-1v1H8v1H3V6H1V5H0V2h1V1h2zM4 2v3h3V2z"/></svg>`;
 const thumb = document.createElement('span');
 thumb.className = 'bar-thumb';
 thumb.setAttribute('role', 'img');
 const barNewGame = document.createElement('button');
 barNewGame.className = 'bar-new-game';
 barNewGame.textContent = 'NOVO JOGO';
-bottomBar.append(thumb, barNewGame);
+bottomBar.append(peekBtn, thumb, barNewGame);
 
 /** Telas (seção 10.2): abertura, menu principal e jogo. */
 type Screen = 'title' | 'menu' | 'game';
@@ -346,6 +352,8 @@ function applyImage(): void {
     thumb.classList.toggle('pixelated', !!url && pixelated);
     thumb.textContent = url ? '' : '123';
     thumb.setAttribute('aria-label', url ? 'Imagem da partida' : 'Só números');
+    // Sem imagem não há o que espiar.
+    peekBtn.disabled = !url;
   };
   sourceImage().then(
     (src) => {
@@ -371,6 +379,8 @@ let paused = false;
 /** Semente da partida atual: REINICIAR recomeça a mesma posição. */
 let seed = 0;
 let gameId = 0;
+/** Espiadas na partida (seção 3.2): entram no resultado e nas estatísticas. */
+let peeks = 0;
 const timer = new Timer();
 
 const COUNTDOWN_FROM = 3;
@@ -420,6 +430,8 @@ function newGame(gameSeed?: number): void {
   pauseScreen.hide();
   board = createBoard(size);
   moves = 0;
+  peeks = 0;
+  stopPeek();
   won = false;
   starting = true;
   status.textContent = '';
@@ -591,6 +603,7 @@ function syncAwake(): void {
 function pause(): void {
   if (screen !== 'game' || won || starting || paused) return;
   paused = true;
+  stopPeek();
   timer.pause();
   queue.length = 0;
   view.release();
@@ -629,6 +642,42 @@ const armBack = setupBackButton(
     else pause();
   },
 );
+
+/**
+ * Espiar (seções 3.2 e 5): segurar o botão mostra a imagem completa em
+ * transparência sobre o tabuleiro; soltar esconde. Cada espiada conta.
+ */
+function startPeek(): void {
+  if (peekBtn.disabled || screen !== 'game' || won || paused || view.el.classList.contains('peeking')) return;
+  peeks++;
+  view.el.classList.add('peeking');
+  peekBtn.setAttribute('aria-pressed', 'true');
+}
+
+function stopPeek(): void {
+  view.el.classList.remove('peeking');
+  peekBtn.setAttribute('aria-pressed', 'false');
+}
+
+peekBtn.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  try {
+    peekBtn.setPointerCapture(e.pointerId);
+  } catch {
+    /* sem captura */
+  }
+  startPeek();
+});
+for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) peekBtn.addEventListener(type, stopPeek);
+// Teclado: segurar Enter ou espaço no botão.
+peekBtn.addEventListener('keydown', (e) => {
+  if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) {
+    e.preventDefault();
+    startPeek();
+  }
+});
+peekBtn.addEventListener('keyup', stopPeek);
+peekBtn.addEventListener('blur', stopPeek);
 
 function renderHud(): void {
   timeEl.textContent = formatTime(timer.elapsedMs());

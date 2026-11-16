@@ -1272,3 +1272,28 @@ button:focus-visible {
     align-self: end;
   }
 }
+
+/* Espiar: imagem completa em transparência sobre o tabuleiro */
+.peek-btn {
+  color: var(--ui-text);
+  touch-action: none;
+}
+
+.peek-btn[aria-pressed='true'] {
+  color: var(--bg);
+  background: var(--ui-text);
+}
+
+.board.peeking::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background: var(--img) 0 0 / 100% 100% no-repeat;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.board.pixelated.peeking::after {
+  image-rendering: pixelated;
+}
