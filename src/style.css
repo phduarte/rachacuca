@@ -622,18 +622,69 @@ button:focus-visible {
   position: absolute;
   inset: 0;
   z-index: 2;
-  display: grid;
-  place-items: center;
-  padding: 8%;
-  font: 700 calc(min(100vw - 32px, 70dvh) * 0.1) / 1.25 var(--font);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 6%;
+  /* Mesma arte da logomarca: letras gordas e arredondadas, degradê, contorno
+     azul-marinho e borda clara de adesivo, levemente inclinadas. */
+  font: 700 calc(min(100vw - 32px, 70dvh) * 0.17) / 1.02 'Fredoka', var(--tile-font);
   text-align: center;
-  color: var(--tile-face);
-  text-shadow:
-    0 0 0.25em var(--glow),
-    0.08em 0.08em 0 color-mix(in srgb, var(--accent), #000 30%),
-    0.12em 0.12em 0 rgb(0 0 0 / 0.6);
+  rotate: -5deg;
+  filter: drop-shadow(0 0.06em 0.06em rgb(0 0 0 / 0.5));
   pointer-events: none;
   animation: win-pop 600ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
+
+@font-face {
+  font-family: 'Fredoka';
+  src: url('/fonts/Fredoka-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+
+.win-word {
+  position: relative;
+  isolation: isolate;
+  white-space: nowrap;
+}
+
+.win-word--bottom {
+  font-size: 0.92em;
+}
+
+/* Camadas atrás do preenchimento: borda clara de adesivo e contorno marinho */
+.win-word::before,
+.win-word::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  color: #0a1f45;
+  -webkit-text-stroke: 0.36em #e3f6ff;
+}
+
+.win-word::after {
+  -webkit-text-stroke: 0.2em #0a1f45;
+}
+
+.win-word > span {
+  color: transparent;
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+
+.win-word--top > span {
+  background-image:
+    linear-gradient(transparent 18%, rgb(255 255 255 / 0.45) 18% 26%, transparent 26%),
+    linear-gradient(15deg, #f0622a 15%, #fa8325 45%, #ffcd3a 85%);
+}
+
+.win-word--bottom > span {
+  background-image:
+    linear-gradient(transparent 18%, rgb(255 255 255 / 0.45) 18% 26%, transparent 26%),
+    linear-gradient(#5fe3e8 10%, #2bbacc 50%, #1a7fd0 95%);
 }
 
 @keyframes win-pop {

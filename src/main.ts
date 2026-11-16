@@ -418,7 +418,21 @@ countdown.setAttribute('aria-live', 'assertive');
 const winMsg = document.createElement('div');
 winMsg.className = 'win-msg';
 winMsg.setAttribute('role', 'status');
-winMsg.textContent = 'Rachou a Cuca!';
+winMsg.setAttribute('aria-label', 'Rachou a Cuca!');
+// Mesma arte da logomarca: palavra de cima laranja, de baixo azul (ui/brand).
+for (const [word, mod] of [
+  ['RACHOU', 'top'],
+  ['A CUCA!', 'bottom'],
+] as const) {
+  const w = document.createElement('span');
+  w.className = `win-word win-word--${mod}`;
+  w.dataset.text = word;
+  w.setAttribute('aria-hidden', 'true');
+  const fill = document.createElement('span');
+  fill.textContent = word;
+  w.append(fill);
+  winMsg.append(w);
+}
 
 /**
  * Partida nova (seção 3): sorteia paleta, imagem e embaralhamento.

@@ -8,6 +8,12 @@ export interface Credit {
 
 export const CREDITS: Credit[] = [
   {
+    what: 'FONTE FREDOKA',
+    who: 'The Fredoka Project Authors',
+    license: 'SIL Open Font License 1.1',
+    url: `${import.meta.env.BASE_URL}fonts/OFL-Fredoka.txt`,
+  },
+  {
     what: '12 IMAGENS ORIGINAIS',
     who: 'Projeto Racha Cuca (pixel art original)',
     license: 'A mesma do projeto',
