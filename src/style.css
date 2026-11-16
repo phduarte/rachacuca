@@ -172,8 +172,7 @@ body {
   width: min(100vw - 32px, 70dvh);
   aspect-ratio: 1;
   flex: none;
-  /* Afastado da borda inferior: os cantos de baixo são a zona "ow" do polegar */
-  margin-bottom: max(16px, 2.5dvh);
+  margin-bottom: 0;
   position: relative;
   touch-action: none;
 
@@ -1020,5 +1019,256 @@ button:focus-visible {
 
   .crt-on :is(.stat-value, .stat-label, .menu-head h2, .pause h2, .palette-toast, .rotate-hint p) {
     text-shadow: none;
+  }
+}
+
+/* Telas cheias por cima do jogo: abertura e menu principal (seção 10.2) */
+.screen {
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+  padding: calc(env(safe-area-inset-top) + 16px) calc(env(safe-area-inset-right) + 16px)
+    calc(env(safe-area-inset-bottom) + 16px) calc(env(safe-area-inset-left) + 16px);
+  background: var(--bg);
+  overflow: hidden auto;
+}
+
+.screen[hidden] {
+  display: none;
+}
+
+/* Abertura: logo montado peça por peça e PRESS START piscando a 1 Hz */
+.title-screen {
+  cursor: pointer;
+  outline: none;
+}
+
+.title-logo {
+  margin: 0;
+  width: min(72vw, 40dvh * 320 / 425);
+  aspect-ratio: 320 / 425;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  filter: drop-shadow(0 6px 10px rgb(0 0 0 / 0.45));
+}
+
+.title-logo span {
+  background-size: 300% 400%;
+  background-repeat: no-repeat;
+  animation: piece-in 450ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+@keyframes piece-in {
+  from {
+    transform: translate(var(--from-x), var(--from-y)) scale(0.4) rotate(-20deg);
+    opacity: 0;
+  }
+}
+
+.press-start {
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: 2px;
+  color: var(--accent);
+  text-shadow: 0.12em 0.12em 0 rgb(0 0 0 / 0.6);
+  animation: press-blink 1s steps(1) infinite 1.2s;
+}
+
+@keyframes press-blink {
+  50% { opacity: 0; }
+}
+
+.title-copy {
+  margin: 0;
+  font-size: 8px;
+  letter-spacing: 1px;
+  opacity: 0.6;
+}
+
+/* Menu principal */
+.main-menu {
+  justify-content: flex-start;
+  gap: 24px;
+}
+
+.main-menu-logo {
+  height: clamp(96px, 22dvh, 200px);
+  width: auto;
+  margin-top: auto;
+  filter: drop-shadow(0 6px 10px rgb(0 0 0 / 0.45));
+  pointer-events: none;
+}
+
+.main-menu-list {
+  width: min(100%, 360px);
+  margin-bottom: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.main-item {
+  position: relative;
+  min-height: 48px;
+  font-size: 16px;
+  letter-spacing: 2px;
+  text-align: left;
+  padding-left: 40px;
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--bezel), #000 45%);
+}
+
+.main-item[hidden] {
+  display: none;
+}
+
+.main-item:active {
+  translate: 0 3px;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--bezel), #000 45%);
+}
+
+/* Cursor de menu de console: ▶ na opção apontada */
+.main-item::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  translate: 0 -50%;
+  border: 7px solid transparent;
+  border-left: 10px solid var(--ui-text);
+  border-right: 0;
+  opacity: 0;
+}
+
+.main-item:is(:hover, :focus-visible)::before {
+  opacity: 1;
+}
+
+.main-item--primary {
+  color: var(--text);
+  background: var(--tile-face);
+  border-color: var(--tile-edge-dark);
+  box-shadow:
+    inset 3px 3px 0 var(--tile-edge-light),
+    inset -3px -3px 0 var(--tile-edge-dark),
+    0 4px 0 color-mix(in srgb, var(--tile-face), #000 45%);
+}
+
+.main-item--primary::before {
+  border-left-color: var(--text);
+}
+
+.main-item--update {
+  font-size: 8px;
+  color: var(--bg);
+  background: var(--glow);
+}
+
+.main-size {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.main-size-label {
+  font-size: 8px;
+  letter-spacing: 1px;
+  opacity: 0.8;
+}
+
+.main-size-buttons {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.main-size-btn {
+  font-size: 16px;
+  padding: 0;
+}
+
+.main-size-btn[aria-checked='true'] {
+  color: var(--text);
+  background: var(--tile-face);
+  border-color: var(--accent);
+}
+
+/* Base da tela de jogo: miniatura e novo jogo (o polegar alcança) */
+.bottom-bar {
+  width: min(100vw - 32px, 70dvh);
+  margin-bottom: max(16px, 2.5dvh);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bar-thumb {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  font: 8px var(--font);
+  color: var(--text);
+  background: var(--tile-face) center / cover no-repeat;
+  border: 3px solid var(--bezel);
+}
+
+.bar-thumb.pixelated {
+  image-rendering: pixelated;
+}
+
+.bar-new-game {
+  margin-left: auto;
+  font-size: 8px;
+  letter-spacing: 1px;
+}
+
+/* Transição de tela: o tubo desliga numa linha, depois num ponto, e liga de novo */
+.tubing,
+.tubing body {
+  background: #000;
+}
+
+#app.tube-off {
+  animation: tube-off 250ms ease-in forwards;
+}
+
+#app.tube-on {
+  animation: tube-off 200ms ease-out reverse;
+}
+
+@keyframes tube-off {
+  0% { transform: scale(1, 1); filter: brightness(1); }
+  60% { transform: scale(1, 0.004); filter: brightness(4); }
+  100% { transform: scale(0, 0.004); filter: brightness(4); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title-logo span,
+  .press-start { animation: none; }
+}
+
+/* Telas largas: a barra da base vai para a coluna do placar */
+@media (orientation: landscape) and (min-width: 900px) and (min-height: 480px) {
+  #app {
+    grid-template-rows: auto 1fr 1fr auto;
+    grid-template-areas:
+      '. menu'
+      'brand board'
+      'display board'
+      'bar board';
+  }
+
+  .bottom-bar {
+    grid-area: bar;
+    width: clamp(240px, 28vw, 460px);
+    align-self: end;
   }
 }

@@ -14,7 +14,7 @@ import { applyPalette, paletteById, PALETTES } from './theme/palettes';
 import { BUILTIN_IMAGES, builtinImageUrl, FILE_IMAGES, fileImageUrl, photoFromFile } from './theme/images';
 import { ORIGINAL_IMAGES } from './theme/originals';
 import { pickFresh, RECENT_IMAGES, RECENT_PALETTES, remember } from './theme/draw';
-import { glitch, setCrt } from './render/crt';
+import { glitch, setCrt, tubeTransition } from './render/crt';
 import { originalImageUrl } from './theme/originals';
 import { forgetRetro, RETRO_GRID, retroize } from './theme/retroize';
 import { loadPhoto, loadRecent, loadSettings, savePhoto, saveRecent, saveSettings, showNumbers } from './settings';
@@ -22,6 +22,8 @@ import { createBrand } from './ui/brand';
 import { createMenu, createMenuButton } from './ui/menu';
 import { createPauseButton, createPauseScreen } from './ui/pause';
 import { createInstallHint } from './ui/installHint';
+import { createTitleScreen } from './ui/title';
+import { createMainMenu } from './ui/mainMenu';
 
 // Bloqueios da seção 9.2 (menu de toque longo e pinça do iOS).
 document.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -67,6 +69,21 @@ const display = document.createElement('section');
 display.className = 'display';
 display.append(hud, status);
 
+// Base da tela de jogo (seção 10.2): miniatura da imagem e novo jogo.
+const bottomBar = document.createElement('footer');
+bottomBar.className = 'bottom-bar';
+const thumb = document.createElement('span');
+thumb.className = 'bar-thumb';
+thumb.setAttribute('role', 'img');
+const barNewGame = document.createElement('button');
+barNewGame.className = 'bar-new-game';
+barNewGame.textContent = 'NOVO JOGO';
+bottomBar.append(thumb, barNewGame);
+
+/** Telas (seção 10.2): abertura, menu principal e jogo. */
+type Screen = 'title' | 'menu' | 'game';
+let screen: Screen = 'title';
+
 /** Versão nova pronta (seção 9.4): aplicar recarrega o app. */
 let applyUpdate: (() => void) | null = null;
 const menuState = () => ({ ...settings, photo, install: installMode(), update: !!applyUpdate });
@@ -75,13 +92,14 @@ const menu = createMenu(menuState, {
   size(n) {
     settings.size = n;
     saveSettings(settings);
-    newGame();
+    mainMenu.render();
+    // Em jogo, o tamanho novo vale já; no menu principal, no próximo NOVO JOGO.
+    if (screen === 'game') newGame();
   },
   open() {
-    timer.pause();
     pause();
   },
-  newGame: () => newGame(),
+  newGame: () => startGame(),
   palette(id) {
     settings.palette = id;
     saveSettings(settings);
@@ -140,13 +158,19 @@ const menu = createMenu(menuState, {
   update() {
     applyUpdate?.();
   },
-  install() {
-    if (installMode() === 'ios') {
-      installHint.open();
-      armBack();
-    } else void promptInstall().then(() => menu.refresh());
-  },
+  install: () => installNow(),
 });
+
+function installNow(): void {
+  if (installMode() === 'ios') {
+    installHint.open();
+    armBack();
+  } else
+    void promptInstall().then(() => {
+      menu.refresh();
+      mainMenu.render();
+    });
+}
 
 sfx.setVolume(settings.volume);
 setCrt(settings.crt);
@@ -168,12 +192,65 @@ let stopVictorySound = (): void => {};
 const pauseScreen = createPauseScreen({
   resume: () => resume(),
   restart: () => newGame(seed),
-  menu() {
-    menu.open();
-    armBack();
-  },
+  menu: () => go('menu'),
 });
-app.append(topBar, display, view.el, pauseScreen.el, menu.el, installHint.el, victory.canvas, createRotateHint());
+
+const titleScreen = createTitleScreen(() => go('menu'));
+const mainMenu = createMainMenu(
+  () => ({
+    canContinue: gameId > 0 && !won,
+    size: settings.size,
+    unlocked6: settings.unlocked6,
+    install: !!installMode(),
+    update: !!applyUpdate,
+    stats: false,
+  }),
+  {
+    continue: () => go('game', () => resume()),
+    newGame: () => go('game', () => newGame()),
+    size(n) {
+      settings.size = n;
+      saveSettings(settings);
+    },
+    images() {
+      menu.open();
+      menu.el.querySelector('.option-grid--pictures')?.closest('section')?.scrollIntoView();
+      armBack();
+    },
+    stats() {},
+    options() {
+      menu.open();
+      armBack();
+    },
+    install: () => installNow(),
+    update: () => applyUpdate?.(),
+  },
+);
+mainMenu.el.addEventListener('click', (e) => {
+  if ((e.target as HTMLElement).closest('button')) sfx.beep();
+});
+
+/** Troca de tela com a transição do tubo (seção 10.2). */
+function go(to: Screen, after?: () => void): void {
+  tubeTransition(() => {
+    screen = to;
+    app.dataset.screen = to;
+    titleScreen.hidden = to !== 'title';
+    mainMenu.el.hidden = to !== 'menu';
+    if (to === 'menu') mainMenu.render();
+    after?.();
+    syncAwake();
+    if (to === 'menu') mainMenu.el.querySelector<HTMLButtonElement>('.main-item:not([hidden])')?.focus({ preventScroll: true });
+  });
+}
+
+/** NOVO JOGO das opções e da barra: em jogo começa já; fora, vai para o jogo. */
+function startGame(): void {
+  if (screen === 'game') newGame();
+  else go('game', () => newGame());
+}
+app.dataset.screen = screen;
+app.append(titleScreen, mainMenu.el, topBar, display, view.el, bottomBar, pauseScreen.el, menu.el, installHint.el, victory.canvas, createRotateHint());
 setupFullscreen();
 /** Conta os pedidos de imagem para ignorar recortes que chegam atrasados. */
 let imageRequest = 0;
@@ -261,7 +338,14 @@ async function sourceImage(): Promise<SourceImage | null> {
 function applyImage(): void {
   const req = ++imageRequest;
   const show = (url: string | null, pixelated = false) => {
-    if (req === imageRequest) view.setImage(url, pixelated);
+    if (req !== imageRequest) return;
+    view.setImage(url, pixelated);
+    // Miniatura na base da tela de jogo.
+    thumb.style.backgroundImage = url ? `url("${url}")` : '';
+    thumb.classList.toggle('bar-thumb--numbers', !url);
+    thumb.classList.toggle('pixelated', !!url && pixelated);
+    thumb.textContent = url ? '' : '123';
+    thumb.setAttribute('aria-label', url ? 'Imagem da partida' : 'Só números');
   };
   sourceImage().then(
     (src) => {
@@ -383,7 +467,7 @@ function newGame(gameSeed?: number): void {
 
 /** Toque, swipe ou tecla: roda já ou espera o deslize atual terminar. */
 function command(cmd: Command): void {
-  if (won || starting || paused) return;
+  if (screen !== 'game' || won || starting || paused) return;
   if (sliding) {
     if (queue.length < QUEUE_MAX) queue.push(cmd);
     return;
@@ -461,7 +545,7 @@ const DIR_VECTORS: Record<Direction, readonly [number, number]> = {
  * no eixo permitido. Solta depois de 40% do caminho, completa; antes, volta.
  */
 function dragStart(x: number, y: number): DragControl | null {
-  if (won || starting || sliding || paused) return null;
+  if (screen !== 'game' || won || starting || sliding || paused) return null;
   const result = moveAt(board, view.indexAt(x, y));
   if (!result) return null;
   const tiles = result.moved.map((m) => m.tile);
@@ -500,12 +584,12 @@ function dragStart(x: number, y: number): DragControl | null {
 
 /** Tela acesa só com a partida em jogo (seção 9.3). */
 function syncAwake(): void {
-  keepAwake(!won && !paused);
+  keepAwake(screen === 'game' && !won && !paused);
 }
 
 /** Pausa a partida em jogo; na contagem ou depois da vitória não há o que pausar. */
 function pause(): void {
-  if (won || starting || paused) return;
+  if (screen !== 'game' || won || starting || paused) return;
   paused = true;
   timer.pause();
   queue.length = 0;
@@ -530,13 +614,18 @@ function openDialog(): HTMLDialogElement | null {
   return document.querySelector<HTMLDialogElement>('dialog[open]');
 }
 
-// Voltar (Android): fecha o diálogo aberto ou pausa a partida (seção 9.3).
-// Na pausa, sem nada para fechar, o voltar segue o padrão do sistema.
+// Voltar (Android): fecha o diálogo aberto, pausa a partida ou, no menu
+// principal com partida em andamento, volta para ela (seção 9.3). Na pausa e
+// na abertura, sem nada para fechar, o voltar segue o padrão do sistema.
 const armBack = setupBackButton(
-  () => !!openDialog() || (!won && !starting && !paused),
+  () =>
+    !!openDialog() ||
+    (screen === 'game' && !won && !starting && !paused) ||
+    (screen === 'menu' && gameId > 0 && !won),
   () => {
     const dlg = openDialog();
     if (dlg) dlg.close();
+    else if (screen === 'menu') go('game');
     else pause();
   },
 );
@@ -580,7 +669,11 @@ window.addEventListener('keydown', (e) => {
 matchMedia(LANDSCAPE_PHONE).addEventListener('change', (e) => {
   if (e.matches) pause();
 });
-window.addEventListener('resize', () => view.update(board));
+window.addEventListener('resize', () => board && view.update(board));
+barNewGame.addEventListener('click', () => {
+  sfx.beep();
+  newGame();
+});
 setInterval(renderHud, 250);
 
 setupInstall(() => menu.refresh());
@@ -595,6 +688,11 @@ setupServiceWorker((apply) => {
   applyUpdate = apply;
   menuBtn.classList.add('has-update');
   menu.refresh();
+  mainMenu.render();
 });
 
-newGame();
+// Começa na abertura, com a paleta fixada (ou a padrão) e sem partida.
+shownPalette = gamePalette;
+applyPalette(paletteById(gamePalette));
+mainMenu.render();
+titleScreen.focus({ preventScroll: true });

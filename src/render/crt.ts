@@ -40,3 +40,32 @@ export function glitch(): void {
   app.style.setProperty('--glitch-bands', `linear-gradient(${stops.join(', ')})`);
   setTimeout(() => app.classList.remove('glitch'), 80);
 }
+
+let tubing = false;
+
+/**
+ * Troca de tela com "desligar o tubo" (seção 10.2): a imagem se fecha numa
+ * linha horizontal e depois num ponto (250 ms), a tela troca e o tubo liga de
+ * novo. Sem animação com movimento reduzido.
+ */
+export function tubeTransition(swap: () => void): void {
+  const app = document.querySelector<HTMLElement>('#app');
+  if (reduced.matches || !app || tubing) {
+    swap();
+    return;
+  }
+  tubing = true;
+  const root = document.documentElement;
+  root.classList.add('tubing');
+  app.classList.add('tube-off');
+  setTimeout(() => {
+    swap();
+    app.classList.remove('tube-off');
+    app.classList.add('tube-on');
+    setTimeout(() => {
+      app.classList.remove('tube-on');
+      root.classList.remove('tubing');
+      tubing = false;
+    }, 200);
+  }, 250);
+}
