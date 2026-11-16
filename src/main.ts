@@ -8,7 +8,10 @@ import { VICTORY_TIMES, VictoryEffect } from './render/victory';
 import * as sfx from './audio/sfx';
 import { holdMusic, setMusic } from './audio/music';
 import { setupServiceWorker } from './pwa/sw';
-import { installMode, markIOSHintShown, promptInstall, setupInstall, shouldShowIOSHint } from './pwa/install';
+import { installMode, promptInstall, setupInstall } from './pwa/install';
+import { db } from './data/db';
+import { legacyPhoto, loadUserPhoto, migrateLegacyPhoto, saveUserPhoto } from './data/images';
+import { installHintShown, loadRecent, markInstallHintShown, saveRecent, type Recent } from './data/meta';
 import { createRotateHint, keepAwake, LANDSCAPE_PHONE, setupBackButton, setupFullscreen } from './pwa/fullscreen';
 import { applyPalette, paletteById, PALETTES } from './theme/palettes';
 import { BUILTIN_IMAGES, builtinImageUrl, FILE_IMAGES, fileImageUrl, photoFromFile } from './theme/images';
@@ -17,7 +20,7 @@ import { pickFresh, RECENT_IMAGES, RECENT_PALETTES, remember } from './theme/dra
 import { glitch, setCrt, tubeTransition } from './render/crt';
 import { originalImageUrl } from './theme/originals';
 import { forgetRetro, RETRO_GRID, retroize } from './theme/retroize';
-import { loadPhoto, loadRecent, loadSettings, savePhoto, saveRecent, saveSettings, showNumbers } from './settings';
+import { loadSettings, saveSettings, showNumbers } from './settings';
 import { createBrand } from './ui/brand';
 import { createMenu, createMenuButton } from './ui/menu';
 import { createPauseButton, createPauseScreen } from './ui/pause';
@@ -52,7 +55,10 @@ hud.append(timeStat.el, movesStat.el);
 
 const view = new BoardView();
 const settings = loadSettings();
-let photo = loadPhoto();
+/** URL da foto do jogador (object URL do IndexedDB), carregada na abertura. */
+let photo: string | null = null;
+/** Paletas e imagens recentes (store meta), carregadas na abertura. */
+let recent: Recent = { palettes: [], images: [] };
 const status = document.createElement('div');
 status.setAttribute('aria-live', 'polite');
 
@@ -137,9 +143,11 @@ const menu = createMenu(menuState, {
     applyImage();
   },
   async photo(file) {
-    photo = await photoFromFile(file);
+    const blob = await photoFromFile(file);
+    if (photo?.startsWith('blob:')) URL.revokeObjectURL(photo);
+    photo = URL.createObjectURL(blob);
     forgetRetro('user');
-    if (!savePhoto(photo)) alert('A FOTO VALE SÓ ATÉ FECHAR O JOGO: FALTOU ESPAÇO.');
+    if (!(await saveUserPhoto(blob, 512))) alert('A FOTO VALE SÓ ATÉ FECHAR O JOGO: FALTOU ESPAÇO.');
     settings.image = 'user';
     gameImage = 'user';
     saveSettings(settings);
@@ -277,16 +285,16 @@ function imageIds(): string[] {
 
 /** Seção 3: sorteia paleta e imagem sem repetir as recentes (ou usa as fixadas). */
 function chooseTheme(): void {
-  const recent = loadRecent();
   gamePalette =
     settings.palette === 'random'
       ? pickFresh(PALETTES.map((p) => p.id), recent.palettes, RECENT_PALETTES)
       : settings.palette;
   gameImage = settings.image === 'random' ? pickFresh(imageIds(), recent.images, RECENT_IMAGES) : settings.image;
-  saveRecent({
+  recent = {
     palettes: remember(recent.palettes, gamePalette, RECENT_PALETTES),
     images: gameImage === 'none' ? recent.images : remember(recent.images, gameImage, RECENT_IMAGES),
-  });
+  };
+  void saveRecent(recent);
 }
 
 const paletteToast = document.createElement('div');
@@ -726,11 +734,21 @@ barNewGame.addEventListener('click', () => {
 setInterval(renderHud, 250);
 
 setupInstall(() => menu.refresh());
-// iOS no Safari, ainda não instalado: o guia aparece sozinho uma única vez.
-if (shouldShowIOSHint()) {
-  markIOSHintShown();
-  installHint.open();
+
+/** Dados do aparelho (seção 11.3): migra a versão anterior e carrega o que o jogo usa. */
+async function loadData(): Promise<void> {
+  await migrateLegacyPhoto();
+  const blob = await loadUserPhoto();
+  photo = blob ? URL.createObjectURL(blob) : legacyPhoto();
+  recent = await loadRecent();
+  // iOS no Safari, ainda não instalado: o guia aparece sozinho uma única vez
+  // (só com banco: sem ele, apareceria a cada abertura).
+  if (installMode() === 'ios' && (await db()) && !(await installHintShown())) {
+    void markInstallHintShown();
+    installHint.open();
+  }
 }
+void loadData();
 
 // A versão nova espera no menu; o botão do menu ganha um aviso.
 setupServiceWorker((apply) => {

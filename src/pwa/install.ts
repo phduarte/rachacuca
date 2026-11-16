@@ -13,8 +13,6 @@ interface BeforeInstallPromptEvent extends Event {
 
 export type InstallMode = 'prompt' | 'ios' | null;
 
-const HINT_KEY = 'rachacuca:installHintShown';
-
 let deferred: BeforeInstallPromptEvent | null = null;
 let installed = isInstalled();
 
@@ -51,22 +49,4 @@ export async function promptInstall(): Promise<void> {
   await e.prompt();
   const { outcome } = await e.userChoice;
   if (outcome === 'accepted') installed = true;
-}
-
-/** O guia do iOS aparece sozinho uma única vez. */
-export function shouldShowIOSHint(): boolean {
-  if (installMode() !== 'ios') return false;
-  try {
-    return !localStorage.getItem(HINT_KEY);
-  } catch {
-    return false; // sem armazenamento, apareceria toda vez
-  }
-}
-
-export function markIOSHintShown(): void {
-  try {
-    localStorage.setItem(HINT_KEY, '1');
-  } catch {
-    /* sem armazenamento */
-  }
 }
