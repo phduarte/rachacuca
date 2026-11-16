@@ -10,7 +10,10 @@ import {
   ImageRuleError,
   onCatalogChange,
   renameImage,
+  requestPersistence,
   setEnabled,
+  storageWarning,
+  USER_LIMIT,
   userCount,
   type CatalogImage,
 } from '../data/images';
@@ -115,7 +118,10 @@ export function createGalleryScreen(h: GalleryHandlers): { el: HTMLDivElement; s
   function render(): void {
     const all = catalog();
     const active = all.filter((i) => i.enabled).length;
-    counter.textContent = `${all.length - userCount()} + ${userCount()} IMAGENS · ${active} ATIVAS`;
+    counter.textContent = `${all.length - userCount()} + ${userCount()} IMAGENS · ${active} ATIVAS · SUAS: ATÉ ${USER_LIMIT}`;
+    const full = userCount() >= USER_LIMIT;
+    pickBtn.disabled = full;
+    cameraBtn.disabled = full;
     for (const f of filters.querySelectorAll<HTMLButtonElement>('[data-filter]')) {
       f.setAttribute('aria-selected', String(f.dataset.filter === filter));
     }
@@ -197,6 +203,7 @@ export function createGalleryScreen(h: GalleryHandlers): { el: HTMLDivElement; s
 
   async function importAll(files: FileList | null): Promise<void> {
     if (!files?.length) return;
+    void requestPersistence();
     let ok = 0;
     message.textContent = 'IMPORTANDO...';
     for (const file of [...files]) {
@@ -214,6 +221,12 @@ export function createGalleryScreen(h: GalleryHandlers): { el: HTMLDivElement; s
     }
     if (ok) message.textContent = ok === 1 ? '1 IMAGEM IMPORTADA.' : `${ok} IMAGENS IMPORTADAS.`;
     else if (message.textContent === 'IMPORTANDO...') message.textContent = '';
+    await warnStorage();
+  }
+
+  async function warnStorage(): Promise<void> {
+    const w = await storageWarning();
+    if (w) message.textContent = w;
   }
 
   filters.addEventListener('click', (e) => {
@@ -274,6 +287,7 @@ export function createGalleryScreen(h: GalleryHandlers): { el: HTMLDivElement; s
     show() {
       message.textContent = '';
       render();
+      void warnStorage();
       root.scrollTop = 0;
     },
   };

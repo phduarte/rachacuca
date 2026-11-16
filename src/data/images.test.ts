@@ -14,3 +14,13 @@ describe('banco de imagens (seção 4.2)', () => {
     await expect(deleteImage(id)).rejects.toBeInstanceOf(ImageRuleError);
   });
 });
+
+describe('limite de imagens do jogador (seção 4.2)', () => {
+  it('aceita até 100 e recusa a 101ª', async () => {
+    const { addImage, USER_LIMIT, userCount } = await import('./images');
+    const blob = new Blob([new Uint8Array([1, 2, 3])], { type: 'image/webp' });
+    for (let i = userCount(); i < USER_LIMIT; i++) await addImage({ blob, thumb: blob, side: 8, title: `T${i}` });
+    expect(userCount()).toBe(USER_LIMIT);
+    await expect(addImage({ blob, thumb: blob, side: 8, title: 'DEMAIS' })).rejects.toBeInstanceOf(ImageRuleError);
+  });
+});

@@ -333,3 +333,32 @@ async function migrateLegacyPhoto(): Promise<void> {
     /* fica para a próxima abertura */
   }
 }
+
+/** Uso do armazenamento a partir do qual a galeria avisa (seção 4.2). */
+export const STORAGE_WARN = 0.8;
+
+/** Aviso de armazenamento quase cheio (acima de 80%), ou null. */
+export async function storageWarning(): Promise<string | null> {
+  try {
+    const { usage, quota } = (await navigator.storage?.estimate?.()) ?? {};
+    if (!usage || !quota) return null;
+    const ratio = usage / quota;
+    return ratio > STORAGE_WARN ? `ARMAZENAMENTO QUASE CHEIO (${Math.round(ratio * 100)}%). APAGUE OU EXPORTE IMAGENS.` : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Na primeira importação, pede ao navegador para não apagar o banco por
+ * falta de espaço (navigator.storage.persist, seção 4.2).
+ */
+export async function requestPersistence(): Promise<void> {
+  try {
+    if (await getMeta<boolean>('persistAsked')) return;
+    await setMeta('persistAsked', true);
+    if (!(await navigator.storage?.persisted?.())) await navigator.storage?.persist?.();
+  } catch {
+    /* navegador sem a API */
+  }
+}
