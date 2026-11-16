@@ -1348,3 +1348,20 @@ button:focus-visible {
 .board.pixelated.peeking::after {
   image-rendering: pixelated;
 }
+
+/* Pergunta SIM/NÃO */
+.confirm {
+  width: min(100vw - 48px, 360px);
+}
+
+.confirm-text {
+  margin: 0;
+  font-size: 8px;
+  line-height: 2;
+}
+
+.confirm-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}

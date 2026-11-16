@@ -9,7 +9,9 @@ import * as sfx from './audio/sfx';
 import { holdMusic, setMusic } from './audio/music';
 import { setupServiceWorker } from './pwa/sw';
 import { installMode, promptInstall, setupInstall } from './pwa/install';
-import { db, type GameRecord } from './data/db';
+import { db, type GameRecord, type SavedSession } from './data/db';
+import { clearSession, loadSession, SAVE_DEBOUNCE_MS, saveSession, saveSessionPatchSync } from './data/session';
+import { confirmDialog } from './ui/confirm';
 import { recordGame, type RecordOutcome } from './data/stats';
 import { legacyPhoto, loadUserPhoto, migrateLegacyPhoto, saveUserPhoto } from './data/images';
 import { installHintShown, loadRecent, markInstallHintShown, saveRecent, type Recent } from './data/meta';
@@ -171,7 +173,8 @@ const menu = createMenu(menuState, {
     if (on) navigator.vibrate?.(8);
   },
   update() {
-    applyUpdate?.();
+    // Seção 9.4: salva a partida antes de recarregar na versão nova.
+    void saveNow().then(() => applyUpdate?.());
   },
   install: () => installNow(),
 });
@@ -210,10 +213,18 @@ const pauseScreen = createPauseScreen({
   menu: () => go('menu'),
 });
 
-const titleScreen = createTitleScreen(() => go('menu'));
+const titleScreen = createTitleScreen(() => {
+  go('menu');
+  // Seção 8.1: partida salva ao fechar o app; ao reabrir, oferece continuar.
+  void dataReady.then(async () => {
+    if (!savedSession || gameId > 0) return;
+    if (await confirmDialog('CONTINUAR PARTIDA?', 'HÁ UMA PARTIDA SALVA NESTE APARELHO.')) continueGame();
+    else await dropSavedSession();
+  });
+});
 const mainMenu = createMainMenu(
   () => ({
-    canContinue: gameId > 0 && !won,
+    canContinue: (gameId > 0 && !won) || !!savedSession,
     size: settings.size,
     unlocked6: settings.unlocked6,
     install: !!installMode(),
@@ -221,7 +232,7 @@ const mainMenu = createMainMenu(
     stats: false,
   }),
   {
-    continue: () => go('game', () => resume()),
+    continue: () => continueGame(),
     newGame: () => go('game', () => newGame()),
     size(n) {
       settings.size = n;
@@ -238,7 +249,7 @@ const mainMenu = createMainMenu(
       armBack();
     },
     install: () => installNow(),
-    update: () => applyUpdate?.(),
+    update: () => void saveNow().then(() => applyUpdate?.()),
   },
 );
 mainMenu.el.addEventListener('click', (e) => {
@@ -257,6 +268,27 @@ function go(to: Screen, after?: () => void): void {
     syncAwake();
     if (to === 'menu') mainMenu.el.querySelector<HTMLButtonElement>('.main-item:not([hidden])')?.focus({ preventScroll: true });
   });
+}
+
+/** CONTINUAR: volta para a partida da memória ou retoma a salva no aparelho. */
+function continueGame(): void {
+  const saved = gameId === 0 ? savedSession : null;
+  go('game', () => {
+    if (saved) restoreSession(saved);
+    // Retomada sempre começa em pausa: o jogo não volta a correr sozinho.
+    if (saved) pause();
+    else resume();
+  });
+}
+
+/** NÃO na pergunta de continuar: a partida salva conta como abandonada. */
+async function dropSavedSession(): Promise<void> {
+  const s = savedSession;
+  savedSession = null;
+  mainMenu.render();
+  if (!s) return;
+  await recordGame({ ...s.game, timeMs: Math.round(s.elapsedMs), status: 'abandoned', finishedAt: Date.now() });
+  await clearSession();
 }
 
 /** NOVO JOGO das opções e da barra: em jogo começa já; fora, vai para o jogo. */
@@ -414,6 +446,38 @@ function gameRecord(status: GameRecord['status']): GameRecord {
   };
 }
 
+/** Partida salva no aparelho e ainda não retomada. */
+let savedSession: SavedSession | null = null;
+let saveTimer = 0;
+/** Cópia da foto usada na partida, para ela seguir se a foto for trocada (seção 4.2). */
+let imageCopy: { gameId: number; blob: Blob } | null = null;
+
+/** Salva a partida em andamento (já ou com debounce de 300 ms). */
+function scheduleSave(): void {
+  clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(() => void saveNow(), SAVE_DEBOUNCE_MS);
+}
+
+async function saveNow(): Promise<void> {
+  clearTimeout(saveTimer);
+  if (!inProgress()) return;
+  const id = gameId;
+  if (gameImage === 'user' && photo && imageCopy?.gameId !== id) {
+    try {
+      imageCopy = { gameId: id, blob: await (await fetch(photo)).blob() };
+    } catch {
+      imageCopy = null;
+    }
+  }
+  const { status: _s, finishedAt: _f, ...game } = gameRecord('abandoned');
+  await saveSession({
+    game,
+    tiles: [...board.tiles],
+    elapsedMs: timer.elapsedMs(),
+    imageCopy: imageCopy?.gameId === id ? imageCopy.blob : undefined,
+  });
+}
+
 /** Partida mexida e não terminada: sair dela para outra conta como abandono (seção 2.5). */
 function inProgress(): boolean {
   return gameId > 0 && !won && moves > 0;
@@ -469,8 +533,12 @@ for (const [word, mod] of [
  */
 function newGame(gameSeed?: number): void {
   if (inProgress()) void recordGame(gameRecord('abandoned'));
+  clearTimeout(saveTimer);
+  void clearSession();
+  savedSession = null;
   const id = ++gameId;
-  size = settings.size;
+  // REINICIAR (mesma semente) mantém o tamanho da partida.
+  if (gameSeed === undefined) size = settings.size;
   if (gameSeed === undefined) {
     gameSeed = newSeed();
     chooseTheme();
@@ -552,6 +620,7 @@ function apply(result: MoveResult): void {
   if (!timer.running) timer.start();
   board = result.board;
   moves += result.moved.length;
+  scheduleSave();
   view.update(board);
   renderHud();
   const solved = isSolved(board);
@@ -566,6 +635,8 @@ function apply(result: MoveResult): void {
     queue.length = 0;
     renderHud();
     syncAwake();
+    clearTimeout(saveTimer);
+    void clearSession();
     lastOutcome = recordGame(gameRecord('won'));
     const outcomeOf = lastOutcome;
     void outcomeOf.then((o) => {
@@ -652,6 +723,43 @@ function dragStart(x: number, y: number): DragControl | null {
       view.release();
     },
   };
+}
+
+/** Retoma a partida salva: posição, tempo, movimentos, espiadas, semente, imagem e paleta. */
+function restoreSession(s: SavedSession): void {
+  savedSession = null;
+  gameId++;
+  const g = s.game;
+  size = g.size;
+  seed = g.seed;
+  recordId = g.id;
+  startedAt = g.startedAt;
+  initialTiles = [...g.initialTiles];
+  moves = g.moves;
+  peeks = g.peeks;
+  gamePalette = g.paletteId;
+  gameImage = g.imageId;
+  // A foto do jogador sumiu ou mudou: a partida segue com a cópia salva.
+  if (g.imageId === 'user' && s.imageCopy) {
+    imageCopy = { gameId, blob: s.imageCopy };
+    if (!photo) photo = URL.createObjectURL(s.imageCopy);
+  }
+  won = false;
+  starting = false;
+  paused = false;
+  sliding = false;
+  queue.length = 0;
+  victory.cancel();
+  countdown.remove();
+  winMsg.remove();
+  status.textContent = '';
+  board = createBoard(size, s.tiles);
+  view.mount(board);
+  view.el.classList.remove('shuffling');
+  applyNumbers();
+  applyTheme();
+  timer.reset(s.elapsedMs);
+  renderHud();
 }
 
 /** Tela acesa só com a partida em jogo (seção 9.3). */
@@ -756,10 +864,12 @@ bindInput(view.el, {
 });
 
 // Seção 2.5: perder o foco leva à pausa, e o jogo não volta a correr sozinho.
+// Seção 8.1: e salva a partida na hora.
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     timer.pause();
     pause();
+    void saveNow();
   }
   // Sem música tocando com o app em segundo plano.
   holdMusic('hidden', document.hidden);
@@ -793,6 +903,8 @@ async function loadData(): Promise<void> {
   const blob = await loadUserPhoto();
   photo = blob ? URL.createObjectURL(blob) : legacyPhoto();
   recent = await loadRecent();
+  savedSession = await loadSession();
+  mainMenu.render();
   // iOS no Safari, ainda não instalado: o guia aparece sozinho uma única vez
   // (só com banco: sem ele, apareceria a cada abertura).
   if (installMode() === 'ios' && (await db()) && !(await installHintShown())) {
@@ -800,7 +912,12 @@ async function loadData(): Promise<void> {
     installHint.open();
   }
 }
-void loadData();
+const dataReady = loadData();
+window.addEventListener('pagehide', () => {
+  if (!inProgress()) return;
+  saveSessionPatchSync({ id: recordId, tiles: [...board.tiles], elapsedMs: timer.elapsedMs(), moves, peeks });
+  void saveNow();
+});
 
 // A versão nova espera no menu; o botão do menu ganha um aviso.
 setupServiceWorker((apply) => {
